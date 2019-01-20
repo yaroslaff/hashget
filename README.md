@@ -1,3 +1,3 @@
 # debsnap
 
-Deduplication tool for archiving debian virtual machines
+Deduplication tool for archiving (backup) debian virtual machines
