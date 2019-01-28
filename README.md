@@ -5,10 +5,11 @@ Deduplication tool for archiving (backup) debian virtual machines
 
 ### commands
 
-bin/debsnap --prepack ~/delme/rootfs
-bin/debsnap --crawl ~/delme/rootfs/
+`bin/debsnap --prepack ~/delme/rootfs`
 
-tar -czf /tmp/rootfs.tar.gz -X ~/debsnap-exclude --exclude='var/lib/apt/lists' -C ~/delme/rootfs/ .
+`bin/debsnap --crawl ~/delme/rootfs/`
+
+`tar -czf /tmp/rootfs.tar.gz -X ~/debsnap-exclude --exclude='var/lib/apt/lists' -C ~/delme/rootfs/ .`
 
 ## .snapfiles format
 .snapfiles
