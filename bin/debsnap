@@ -1,0 +1,396 @@
+#!/usr/bin/python
+
+import argparse
+import os
+import urlparse
+import requests
+import json
+import hashlib
+import re
+import sys
+import time
+import logging
+
+#from debsnapm import load_release
+
+import debsnap
+from debsnap.utils import kmgt
+
+
+BUF_SIZE = 1024*1024
+
+repo = dict()
+log=None
+hashdb = None
+
+def download_file(url, prefix="/tmp", headers=None):
+    headers = headers or dict()
+    out = dict()
+
+    chunk_size = 1024*1024
+    basename = url.split('/')[-1]
+    local_filename = os.path.join(prefix, basename)
+
+    r = requests.get(url, stream=True, headers=headers)
+    
+    if r.status_code != 200:
+        return None
+        
+    with open(local_filename, 'wb') as f:
+        for chunk in r.iter_content(chunk_size=chunk_size): 
+            if chunk: # filter out keep-alive new chunks
+                f.write(chunk)
+
+    return local_filename
+
+
+
+def deb2url(root, project, basename):
+    if basename.startswith('lib'):
+        namedir = os.path.join(project, 'name', basename[0:3], basename[3], basename[4])
+    else:
+        namedir = os.path.join(project, 'name', basename[0], basename[1])
+
+    namepath = os.path.join(namedir, basename)
+    project_url = urlparse.urljoin(root, project)
+    file_url = urlparse.urljoin(project_url, namepath)
+    return file_url
+
+
+
+def fetch(hashserver, project, deb):
+    debinfo_url = deb2url(hashserver, project, deb)
+    r = requests.get(debinfo_url)
+    debinfo = json.loads(r.text)
+    
+    urls = list()
+
+    
+    if debinfo['repo'] in repo:
+        urls.append(urlparse.urljoin(repo[debinfo['repo']], debinfo['urlpath']))
+    
+    urls.append(debinfo['url'])
+    urls.append(debinfo['snap_url'])
+    
+    for url in urls:
+        f = download_file(url, prefix=".")
+        if f:    
+            print "Downloaded {} to {}".format(url, f)
+            return
+        else:
+            print "Failed to get from {}".format(url)
+    
+
+#
+# Prepare
+#
+
+def prepare(root, hashdb, anchsz, filesz, skipdirs, excludefile):
+    """
+        ANCHORS ???
+    """
+
+    files = prepare_readfiles(root, anchsz, filesz, skipdirs)
+    ph = dict() # package hashes to URLs
+    snapfile = os.path.join(root,'.snapfiles')
+    
+    with open(excludefile,'w') as excf:
+        with open(snapfile, 'w') as snf:                
+            for f in files:
+                try:
+                    """
+                        save url and package hashes, then write to snf
+                        write file info to snf
+                    """
+                    phash = hashdb.fhash2phash(f.hashes.sha256)
+                    ph[phash] = hashdb.phash2url(phash)
+                    excf.write("{}\n".format(os.path.relpath(f.filename, root)))    
+
+                    #file:usr/bin/vim.basic perm:permissions uid:NN gid:NN sha256:HHHH 
+                       
+                    snf.write("file:{} perm:{} uid:{} gid:{} atime:{} ctime:{} mtime:{} sha256:{}\n".format(
+                            os.path.relpath(f.filename, root),
+                            oct(f.mode),
+                            f.userid,
+                            f.groupid,
+                            f.atime, f.ctime, f.mtime,
+                            f.hashes.sha256
+                        ))
+                except KeyError:
+                    # not found in any packages
+                    pass
+                    
+            for ph, purl in ph.iteritems():
+                snf.write("packagesha256:{} url:{}\n".format(ph,purl))
+                
+
+    # guess_packages(root, files)
+
+
+
+def prepare_readfiles(root, anchsz, filesz, skipdirs):
+
+    def skipdir(d, skipdirs):
+        # maybe skip it?
+        for sd in skipdirs:
+            if (d+'/').startswith(sd):
+                return True
+        return False
+
+    total = 0
+    files = list()
+
+    for directory, subdirs, dirfiles in os.walk(root):
+    
+        if skipdir(directory, skipdirs):
+            continue
+                
+    
+        for basename in dirfiles:
+            total += 1        
+            path = os.path.join(directory, basename)                        
+            
+            if os.path.islink(path) or not os.path.isfile(path):
+                continue
+            
+            f = debsnap.File(path)
+            if f.size > filesz:
+                files.append(f)
+            #if f.size > 100*1024:
+            #    anchors.append(f)
+
+    # sort anchors
+    files = debsnap.FileList(sorted(files, key = lambda k: getattr(k,'size'), reverse=True))
+    
+    return files
+    
+
+#
+# PostUnpack
+#
+def postunpack(root, hashdb):
+    print "postunpack", root
+
+#
+# Crawling
+#
+
+def crawl1(p):
+    
+    prefix = 'http://snapshot.debian.org/mr/'
+    aurl_prefix = 'http://snapshot.debian.org/archive'    
+    
+
+    cg = debsnap.CacheGet()
+
+    hashsum = None
+    
+    # print "Crawl package", p['Package']
+    
+    url = prefix + 'binary/' + p['Package'] + '/' + p['Version'] + '/binfiles'
+    r = requests.get(url)
+    data = json.loads(r.text)
+    
+    # print json.dumps(data, indent=4)
+    for r in data['result']:
+        if r['architecture'] == p['Architecture']:
+            hashsum = r['hash']
+    
+    print "hashsum:", hashsum
+    
+    url = prefix + 'file/' + hashsum + '/info'
+    r = requests.get(url)
+    data = json.loads(r.text)
+    result = data['result'][0]
+    
+    # print json.dumps(data, indent=4)
+    
+
+    arcname = result['archive_name']
+    first_seen = result['first_seen']     
+    path = result['path'][1:]
+    size = result['size']
+    name = result['name']
+    
+    url = '/'.join([ aurl_prefix, arcname, first_seen, path, name ]) 
+    #print "downloading", url
+
+    # url = 'http://ftp.ru.debian.org/debian/pool/main/t/t-code/t-code-common_2.3.1-3.5_all.deb'
+    # url = 'http://ftp.ru.debian.org/debian/pool/main/0/0ad-data/0ad-data_0.0.23-1~bpo9%2b1_all.deb'
+    # url = 'https://mirror.yandex.ru/debian/pool/main/2/2048-qt/2048-qt_0.1.5-2_amd64.deb'
+    
+    get_started = time.time()
+    # f = debsnap.download_file(url)
+    f = cg.get(url)
+
+    print f['code'], kmgt(f['size']), f['url'] 
+
+    #print json.dumps(f, indent=4)
+     
+
+    # calc file hashes
+    fhashes = debsnap.File(f['file'])
+    print "FILE:", fhashes
+
+    attrs = dict() 
+    #{
+    #    'sha256': fhashes.hashes.sha256,
+    #    'md5': fhashes.hashes.md5
+    #    }
+
+    anchors, files = debsnap.walk_arc(f['file'], minsz = 102400, log=log)
+    
+    
+    hp = debsnap.HashPackage(
+            anchors = anchors,
+            files = files,
+            url = url,
+            attrs = attrs,
+            sha256 = fhashes.hashes.sha256,
+            md5 = fhashes.hashes.md5  
+        )
+        
+    print "took: {:.2f}".format( time.time() - get_started )
+
+    hashdb.submit(hp)
+
+def crawl_packages(root):
+
+    def file2pkgname(filename):
+        # delete suffix (.list) or :arch.list
+        if ':' in filename:
+            return filename.split(':')[0]
+        else:
+            return '.'.join(filename.split('.')[:-1])
+        
+
+    status = debsnap.load_release(os.path.join(root, 'var/lib/dpkg/status'))
+    
+    for p in status:
+        
+        if p['Status'] != 'install ok installed':
+            continue
+        
+        # print "==="
+        # print json.dumps(p, indent=4)
+        # print "---"
+        crawl1(p)
+        
+    return
+
+    dpkginfo = os.path.join(root, 'var/lib/dpkg/info')
+
+    for filename in os.listdir(dpkginfo):
+        if not filename.endswith('.list'):
+            continue
+            
+        path = os.path.join(dpkginfo, filename)
+        pkgname = file2pkgname(filename)
+        print "===", pkgname, filename, "==="
+        with open(path,'r') as fh:
+            for line in fh:
+                fullpath = os.path.join(root, line.rstrip()[1:])
+                try:
+                    f = files.getbypath(fullpath)
+                    print f
+                except KeyError:
+                    print ".. {} not in files".format(fullpath)
+
+
+def main():
+
+    global log, hashdb
+
+    def_anchsz = 100*1024
+    def_filesz = 1024
+    def_hashserver = 'http://debsnap.okerr.com/'
+    def_project = 'DEBSNAP'
+    def_excludefile = os.path.expanduser("~/debsnap-exclude") 
+
+
+    def_skipdirs = ['var/cache/','var/lib/apt/']
+
+    parser = argparse.ArgumentParser(description='debsnap deduplicator')
+
+    g = parser.add_argument_group('Commands')
+    g.add_argument('--prepack', default=None, metavar='DIR', help='prepare DIR for snap-tarring')
+    g.add_argument('--crawl', default=None, metavar='DIR', help='snapshot crawl packages in DIR')
+    g.add_argument('--postunpack', default=None, metavar='DIR', help='post-unpack')
+
+    g.add_argument('--fetch', default=None, help='BROKEN? fetch .deb file by name')
+
+
+    g = parser.add_argument_group('Options')
+    g.add_argument('--anchsz', type=int, default=def_anchsz, help='min size of anchors ({})'.format(def_anchsz))
+    g.add_argument('--filesz', type=int, default=def_filesz, help='min size of files')
+    g.add_argument('--hashserver', default=def_hashserver, help='hashserver URL ({})'.format(def_hashserver))
+    g.add_argument('--project', default=def_project, help='project name ({})'.format(def_project))
+    g.add_argument('--repo', nargs=2, action='append', metavar=('REPO_TAG', 'REPO_URL'), default=list(), help='repositories (many)')
+    g.add_argument('-X','--exclude-from', metavar='FILENAME', dest='excludefile', default=def_excludefile, help='Exclude file (for -X tar option) ({})'.format(def_excludefile))
+
+
+    g = parser.add_argument_group('Target system specification')
+    g.add_argument('--skip', nargs='*', default=def_skipdirs, help='Do not try to dedup these dirs ({}). Relative to --prepare path'.format(def_skipdirs))
+
+
+    g = parser.add_argument_group('Logging, output')
+    g.add_argument('--logfile', default=None, help='log file name')
+    g.add_argument('-v', dest='verbose', default=False, action='store_true', help='verbose mode')
+    g.add_argument('-q', dest='quiet', default=False, action='store_true', help='quiet mode')
+
+
+    args = parser.parse_args()
+
+    hashdb = debsnap.DirHashDB()
+
+    # configure logging
+    FORMAT = '%(asctime)s %(message)s'
+    if args.verbose:
+        loglevel = logging.DEBUG
+    else:
+        loglevel = logging.INFO
+
+    if args.quiet:
+        loglevel = logging.ERROR
+
+    logging.basicConfig(level = loglevel, format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    log = logging.getLogger('slowget')
+    if args.logfile:
+        fh = logging.FileHandler(args.logfile)
+        fh.setFormatter(logging.Formatter(FORMAT, datefmt='%Y-%m-%d %H:%M:%S'))
+        log.addHandler(fh)
+
+
+
+    for e in os.environ:        
+        if e.startswith("REPO_"):
+            rname = e[len("REPO_"):]
+            repo[rname] = os.environ[e]
+            print "import repo {} {} from env".format(rname, repo[rname])
+
+    for r in args.repo:
+        repo[r[0]]=r[1]
+        print "import repo {} {} from args".format(rname, repo[rname])            
+
+    if args.crawl:
+        crawl_packages(args.crawl)
+
+    if args.prepack:
+        
+        skipdirs = [ os.path.join(args.prepack, d) for d in args.skip ]    
+                          
+        prepare(args.prepack,
+            hashdb = hashdb,
+            anchsz = args.anchsz,
+            filesz = args.filesz,
+            skipdirs = skipdirs,
+            excludefile = args.excludefile
+            )
+
+    if args.postunpack:
+        postunpack(args.postunpack, hashdb = hashdb)
+            
+    if args.fetch:
+        fetch(args.hashserver, args.project, args.fetch)
+
+main()
