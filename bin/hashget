@@ -266,7 +266,7 @@ def crawl1(p):
 
     hashdb.submit(hp)
 
-def crawl_packages(root, delay=0):
+def debcrawl_packages(root, delay=0):
 
     cnt_total = 0
     cnt_installed = 0
@@ -316,17 +316,12 @@ def crawl_packages(root, delay=0):
         ))
 
 
-def get(hashstr):
+def get(hashspec):
 
-    try:
-        url = hashdb.phash2url(hashstr)
-        # package hash
-        print("url:", url)
-    except KeyError:
-        # file in hash
-        phash = hashdb.fhash2phash(hashstr)
-        url = hashdb.phash2url(hashstr)
+    url = hashdb.hash2url(hashspec)
 
+    p = hashget.package.Package(url = url)
+    print(p)
     
         
 def main():
@@ -344,13 +339,15 @@ def main():
     parser = argparse.ArgumentParser(description='HashGet fetcher and deduplicator')
 
     g = parser.add_argument_group('Commands')
-    g.add_argument('--get', default=None, metavar='HASH', help='get file by hash')
+    g.add_argument('--get', default=None, metavar='HASHSPEC', help='get file by hash')
     g.add_argument('--prepack', '-p', default=None, metavar='DIR', help='prepare DIR for hash-tarring')
-    g.add_argument('--crawl', default=None, metavar='DIR', help='snapshot crawl packages in DIR')
     g.add_argument('--postunpack', '-u', default=None, metavar='DIR', help='post-unpack')
-
     g.add_argument('--fetch', default=None, help='BROKEN? fetch .deb file by name')
 
+
+    g = parser.add_argument_group('Local HashDB commands')
+    g.add_argument('--debcrawl', default=None, metavar='DIR', help='snapshot crawl packages in DIR')
+    g.add_argument('--submit', default=None, metavar='URL', help='submit URL')
 
     g = parser.add_argument_group('Options')
     g.add_argument('--anchsz', type=int, default=def_anchsz, help='min size of anchors ({})'.format(def_anchsz))
@@ -405,8 +402,8 @@ def main():
         repo[r[0]]=r[1]
         print("import repo {} {} from args".format(rname, repo[rname]))
         
-    if args.crawl:
-        crawl_packages(args.crawl, args.sleep)
+    if args.debcrawl:
+        debcrawl_packages(args.crawl, args.sleep)
 
     if args.prepack:
         

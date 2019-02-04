@@ -8,4 +8,4 @@ import requests
 #import cachecontrol
 from . import utils 
 from . import hashfile
-
+from . import package

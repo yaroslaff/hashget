@@ -7,7 +7,13 @@ import argparse
 
 def convert(data):
     # transform    
-    data['anchors'] = [ 'sha256:' + h for h in data['anchors'] ]    
+    data['hashes'] = list()
+    
+    for hname in ['md5', 'sha256']:
+        data['hashes'].append(hname + ':' + data[hname])
+        del data[hname]
+    
+    
     # print(json.dumps(data, indent=4))
 
 
