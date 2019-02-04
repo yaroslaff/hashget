@@ -1,49 +1,11 @@
-from tempfile import mkdtemp
+#from tempfile import mkdtemp
+import tempfile
+#print "mkdtemp:", mkdtemp
 import filetype
 import subprocess
 import os
 import hashlib
 import shutil
-
-def load_release(filename):
-    """
-        load Release file as data structure
-    """
-    data = dict()
-    datalist = list()
-    lastkey = None    
-    
-    array = False
-    
-    with open(filename) as f:
-        for line in f:
-            if line == '\n':
-                # list element
-                array = True
-                datalist.append(data)
-                data = dict()                    
-            elif line[0] == ' ':
-                # starts with space
-                if data[lastkey] == '':
-                    data[lastkey] = list()
-                else:
-                    if isinstance(data[lastkey], list):
-                        data[lastkey].append(line.strip())
-                    else:
-                        # string continues on new line
-                        data[lastkey] += line.strip()
-            else:
-                # usual key: value
-                k, v = line.rstrip().split(':',1)
-                data[k] = v.strip()
-                lastkey = k
-
-    # end of file
-    if array:
-        return datalist
-    
-    return data
-
 
 def get_hash(filename, hashmethod=None):
     
@@ -81,7 +43,7 @@ def dircontent(root):
 def rmrf(dirname):
     for path in dircontent(dirname):
         if not os.path.islink(path):
-            os.chmod(path, 0777)
+            os.chmod(path, 0o777)
     shutil.rmtree(dirname)
 
 def rmlinks(dirname):
@@ -107,7 +69,7 @@ def walk_arc(filename, minsz=0, maxn=3, log=None):
         log.error("ERROR Cannot get filetype for {}".format(filename))
 
     if k.mime == 'application/x-deb':
-        tdir = mkdtemp(prefix='gethash-', dir=tmpdir)
+        tdir = tempfile.mkdtemp(prefix='gethash-', dir=tmpdir)
         #print "tdir:", tdir
         # Archive(filename).extractall(tdir)
         unpack_deb(filename, tdir)

@@ -1,9 +1,10 @@
 import os
-from urlparse import urlparse
+from urllib.parse import urlparse
 import tempfile
 import requests
+import time
 
-from utils import kmgt
+from .utils import kmgt
 
 class CacheGet():
     
@@ -24,8 +25,7 @@ class CacheGet():
         self.tmpprefix = tmpprefix or 'CacheGet-'
     
     
-    def get(self, url, headers=None):
-
+    def get(self, url, headers=None, log=None):
 
         def logdebug(msg):
             # print msg
@@ -85,8 +85,6 @@ class CacheGet():
             try:
                 r = requests.get(url, stream=True, headers=headers)
             except requests.exceptions.RequestException as e:
-                if counter:
-                    counter + 1
                 if log:
                     log.debug('download error {}: {}. Retry.'.format(url, str(e)))
                 time.sleep(10)
@@ -96,7 +94,7 @@ class CacheGet():
             out['ETag'] = r.headers['ETag']
             if not os.path.isdir(etag_dir):
                 os.makedirs(etag_dir)
-            with open(etag_filename,'wb') as etagf:
+            with open(etag_filename,'w') as etagf:
                 etagf.write(r.headers['ETag'])
                         
         if r.status_code == 304:
@@ -109,9 +107,7 @@ class CacheGet():
             if log:
                 log.error("DOWNLOAD ERROR {} {}".format(r.status_code, url))
             return None
-            
-            
-        print r.headers
+                        
         
         for chunk in r.iter_content(chunk_size=chunk_size): 
             if chunk: # filter out keep-alive new chunks

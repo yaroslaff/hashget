@@ -146,22 +146,23 @@ class HashPackage(object):
         represents one hashpackage, e.g. one .deb file or .tar.gz, downloaded from one URL
     """
     
-    fields = ['url', 'files', 'anchors', 'sha256', 'md5']
+    fields = ['url', 'files', 'anchors', 'sha256', 'md5', 'signature']
     
-    def __init__(self, url=None, anchors=None, files=None, sha256=None, md5=None, attrs=None):
+    def __init__(self, url=None, anchors=None, files=None, sha256=None, md5=None, attrs=None, signature=None):
         self.url = url
         self.anchors = anchors
         self.files = files                
         self.md5 = md5
         self.sha256 = sha256
         self.attrs = attrs or dict()
-    
+        self.signature = signature
 
     def __eq__(self, obj):
         return (self.url == obj.url
                 and self.anchors == obj.anchors
                 and self.files == obj.files
-                and self.attrs == obj.attrs)
+                and self.attrs == obj.attrs
+                and self.signature == obj.signature)
     
     @staticmethod
     def load(stream):
@@ -175,8 +176,7 @@ class HashPackage(object):
             setattr(hp, name, data[name])
         
         return hp
-    
-    
+        
     def __repr__(self):
         basename = self.url.split('/')[-1]
         return "{} ({}/{})".format(basename, len(self.anchors), len(self.files))
@@ -219,12 +219,19 @@ class DirHashDB(HashDB):
             # default path
             if os.getuid() == 0:
                 # root                
-                self.path = '/var/cache/debsnap/hashdb'
+                self.path = '/var/cache/hashget/hashdb'
             else:
                 # usual user
-                self.path = os.path.expanduser("~/.debsnap/hashdb") 
+                self.path = os.path.expanduser("~/.hashget/hashdb") 
+        
+        # package Hash to URL
         self.h2url = dict()
+        
+        # File Hash to Package Hash
         self.fh2ph = dict()
+
+        # Signature to Package Hash
+        self.sig2hash = dict()
 
         self.load()
 
@@ -232,17 +239,26 @@ class DirHashDB(HashDB):
         """
             DirHashDB.load()
         """
+        
+        if not os.path.isdir(self.path):
+            # no hashdb
+            return
+        
         for f in os.listdir( self.path ):
             with open(os.path.join(self.path, f)) as f:
 
                 hp = HashPackage().load(f)
 
+                self.h2url[hp.sha256] = hp.url
+
                 for hpf in hp.files:
                     self.fh2ph[hpf] = hp.sha256
                     
-                self.h2url[hp.sha256] = hp.url
-        
+                if hp.signature:
+                    self.sig2hash[hp.signature] = hp.sha256
+                                    
 
+        
 
     def fhash2phash(self, hsum):
         """
@@ -251,9 +267,20 @@ class DirHashDB(HashDB):
         return self.fh2ph[hsum]
                         
     def phash2url(self, hsum):
+        """
+            Hash of package to URL of package
+        """
         return self.h2url[hsum]
-
+    
+    def sig_present(self, sig):
+        return sig in self.sig2hash
+        
+    
+    # HashDB.submit
     def submit(self, hp):
+        """
+            Submit HashPackage to hashdb
+        """
         basename = hp.url.split('/')[-1]
         path = os.path.join(self.path, basename)
         dirname = os.path.dirname(path)

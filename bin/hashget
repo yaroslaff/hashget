@@ -1,8 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import argparse
 import os
-import urlparse
+import urllib.parse
 import requests
 import json
 import hashlib
@@ -10,12 +10,17 @@ import re
 import sys
 import time
 import logging
+import tempfile
+import hashlib
+
+from requests.packages.urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
+    
 
 #from debsnapm import load_release
 
-import debsnap
-from debsnap.utils import kmgt
-
+import hashget
+from hashget.utils import kmgt
 
 BUF_SIZE = 1024*1024
 
@@ -52,8 +57,8 @@ def deb2url(root, project, basename):
         namedir = os.path.join(project, 'name', basename[0], basename[1])
 
     namepath = os.path.join(namedir, basename)
-    project_url = urlparse.urljoin(root, project)
-    file_url = urlparse.urljoin(project_url, namepath)
+    project_url = urllib.parse.urljoin(root, project)
+    file_url = urllib.parse.urljoin(project_url, namepath)
     return file_url
 
 
@@ -67,7 +72,7 @@ def fetch(hashserver, project, deb):
 
     
     if debinfo['repo'] in repo:
-        urls.append(urlparse.urljoin(repo[debinfo['repo']], debinfo['urlpath']))
+        urls.append(urllib.parse.urljoin(repo[debinfo['repo']], debinfo['urlpath']))
     
     urls.append(debinfo['url'])
     urls.append(debinfo['snap_url'])
@@ -75,10 +80,10 @@ def fetch(hashserver, project, deb):
     for url in urls:
         f = download_file(url, prefix=".")
         if f:    
-            print "Downloaded {} to {}".format(url, f)
+            print("Downloaded {} to {}".format(url, f))
             return
         else:
-            print "Failed to get from {}".format(url)
+            print("Failed to get from {}".format(url))
     
 
 #
@@ -92,37 +97,28 @@ def prepare(root, hashdb, anchsz, filesz, skipdirs, excludefile):
 
     files = prepare_readfiles(root, anchsz, filesz, skipdirs)
     ph = dict() # package hashes to URLs
-    snapfile = os.path.join(root,'.snapfiles')
+    hlist = hashget.hashlist.hashlist()
     
     with open(excludefile,'w') as excf:
-        with open(snapfile, 'w') as snf:                
-            for f in files:
-                try:
-                    """
-                        save url and package hashes, then write to snf
-                        write file info to snf
-                    """
-                    phash = hashdb.fhash2phash(f.hashes.sha256)
-                    ph[phash] = hashdb.phash2url(phash)
-                    excf.write("{}\n".format(os.path.relpath(f.filename, root)))    
-
-                    #file:usr/bin/vim.basic perm:permissions uid:NN gid:NN sha256:HHHH 
-                       
-                    snf.write("file:{} perm:{} uid:{} gid:{} atime:{} ctime:{} mtime:{} sha256:{}\n".format(
-                            os.path.relpath(f.filename, root),
-                            oct(f.mode),
-                            f.userid,
-                            f.groupid,
-                            f.atime, f.ctime, f.mtime,
-                            f.hashes.sha256
-                        ))
-                except KeyError:
-                    # not found in any packages
-                    pass
+        for f in files:
+            try:
+                """
+                    save url and package hashes, then write to snf
+                    write file info to snf
+                """
+                phash = hashdb.fhash2phash(f.hashes.sha256)
+                ph[phash] = hashdb.phash2url(phash)
+                excf.write("{}\n".format(os.path.relpath(f.filename, root)))    
+                hlist.add_file(f)
                     
-            for ph, purl in ph.iteritems():
-                snf.write("packagesha256:{} url:{}\n".format(ph,purl))
+            except KeyError:
+                # unique file, not found in any packages
+                pass
                 
+        for ph, purl in ph.items():
+            snap.add_package(url = purl, sha256 = ph)
+        
+        hlist.save(os.path.join(root,'.hashlist'))
 
     # guess_packages(root, files)
 
@@ -153,14 +149,14 @@ def prepare_readfiles(root, anchsz, filesz, skipdirs):
             if os.path.islink(path) or not os.path.isfile(path):
                 continue
             
-            f = debsnap.File(path)
+            f = hashget.File(path, root=root)
             if f.size > filesz:
                 files.append(f)
             #if f.size > 100*1024:
             #    anchors.append(f)
 
     # sort anchors
-    files = debsnap.FileList(sorted(files, key = lambda k: getattr(k,'size'), reverse=True))
+    files = hashget.FileList(sorted(files, key = lambda k: getattr(k,'size'), reverse=True))
     
     return files
     
@@ -169,7 +165,59 @@ def prepare_readfiles(root, anchsz, filesz, skipdirs):
 # PostUnpack
 #
 def postunpack(root, hashdb):
-    print "postunpack", root
+    print("postunpack: " + root)
+    cg = hashget.CacheGet()
+
+    snap = hashget.snapfile.snapfile(os.path.join(root, '.hashist'))
+    snap.preiteration()
+    print(snap)
+    
+    tdir = tempfile.mkdtemp(prefix='hashget-postunpack-')
+    
+    for purl in snap.packages():
+        pbasename = purl.split('/')[-1]
+        ptdir = os.path.join(tdir, pbasename)
+        os.mkdir(ptdir)
+
+        lp = cg.get(purl)
+        
+        hashget.unpack_deb(lp['file'], ptdir)
+    
+        for r, dirs, files in os.walk(ptdir):
+            for basename in files:
+                        
+                fpath = os.path.join(r, basename)
+                if not os.path.isfile(fpath) or os.path.islink(fpath):
+                    continue
+
+                h = hashlib.sha256()
+                
+                with open(fpath, 'rb') as f:
+                    while True:
+                        data = f.read(BUF_SIZE)
+                        if not data:
+                            break
+                        h.update(data)
+                
+                sha256 = h.hexdigest()            
+
+                try:
+                    f = snap.fbyhash(sha256)
+                    f.recover(fpath)
+                    print(f.filename)
+                    # snap.set_processed(sha256)
+                except LookupError as e:
+                    # print "not found: {}".format(e)
+                    continue
+    
+    for f in snap.files():
+        # print "look for", f.hashes.sha256
+        phash = hashdb.fhash2phash(f.hashes.sha256)
+        # print phash
+    
+        # get from hashdb
+        
+    # delete tmpdir
 
 #
 # Crawling
@@ -177,60 +225,23 @@ def postunpack(root, hashdb):
 
 def crawl1(p):
     
-    prefix = 'http://snapshot.debian.org/mr/'
-    aurl_prefix = 'http://snapshot.debian.org/archive'    
+   
+    print("Crawl", p)
+    url = p.snapshot_url()    
     
-
-    cg = debsnap.CacheGet()
-
-    hashsum = None
-    
-    # print "Crawl package", p['Package']
-    
-    url = prefix + 'binary/' + p['Package'] + '/' + p['Version'] + '/binfiles'
-    r = requests.get(url)
-    data = json.loads(r.text)
-    
-    # print json.dumps(data, indent=4)
-    for r in data['result']:
-        if r['architecture'] == p['Architecture']:
-            hashsum = r['hash']
-    
-    print "hashsum:", hashsum
-    
-    url = prefix + 'file/' + hashsum + '/info'
-    r = requests.get(url)
-    data = json.loads(r.text)
-    result = data['result'][0]
-    
-    # print json.dumps(data, indent=4)
-    
-
-    arcname = result['archive_name']
-    first_seen = result['first_seen']     
-    path = result['path'][1:]
-    size = result['size']
-    name = result['name']
-    
-    url = '/'.join([ aurl_prefix, arcname, first_seen, path, name ]) 
-    #print "downloading", url
-
-    # url = 'http://ftp.ru.debian.org/debian/pool/main/t/t-code/t-code-common_2.3.1-3.5_all.deb'
-    # url = 'http://ftp.ru.debian.org/debian/pool/main/0/0ad-data/0ad-data_0.0.23-1~bpo9%2b1_all.deb'
-    # url = 'https://mirror.yandex.ru/debian/pool/main/2/2048-qt/2048-qt_0.1.5-2_amd64.deb'
+    cg = hashget.CacheGet()
     
     get_started = time.time()
-    # f = debsnap.download_file(url)
     f = cg.get(url)
 
-    print f['code'], kmgt(f['size']), f['url'] 
+    print(f['code'], kmgt(f['size']), f['url'])
 
     #print json.dumps(f, indent=4)
      
 
     # calc file hashes
-    fhashes = debsnap.File(f['file'])
-    print "FILE:", fhashes
+    fhashes = hashget.File(f['file'])
+    # print "FILE:", fhashes
 
     attrs = dict() 
     #{
@@ -238,23 +249,32 @@ def crawl1(p):
     #    'md5': fhashes.hashes.md5
     #    }
 
-    anchors, files = debsnap.walk_arc(f['file'], minsz = 102400, log=log)
+    anchors, files = hashget.walk_arc(f['file'], minsz = 102400, log=log)
     
     
-    hp = debsnap.HashPackage(
+    hp = hashget.HashPackage(
             anchors = anchors,
             files = files,
             url = url,
             attrs = attrs,
             sha256 = fhashes.hashes.sha256,
-            md5 = fhashes.hashes.md5  
+            md5 = fhashes.hashes.md5,
+            signature = p.get_signature()
         )
-        
-    print "took: {:.2f}".format( time.time() - get_started )
+    
+    print("took: {:.2f}".format( time.time() - get_started ))
 
     hashdb.submit(hp)
 
-def crawl_packages(root):
+def crawl_packages(root, delay=0):
+
+    cnt_total = 0
+    cnt_installed = 0
+    cnt_not_installed = 0
+    cnt_already = 0
+    cnt_new = 0
+    
+    started = time.time()
 
     def file2pkgname(filename):
         # delete suffix (.list) or :arch.list
@@ -264,58 +284,70 @@ def crawl_packages(root):
             return '.'.join(filename.split('.')[:-1])
         
 
-    status = debsnap.load_release(os.path.join(root, 'var/lib/dpkg/status'))
+    status = hashget.debian.load_release(os.path.join(root, 'var/lib/dpkg/status'))
     
-    for p in status:
+    for pdict in status:
         
-        if p['Status'] != 'install ok installed':
+        p = hashget.debian.DebPackage(info = pdict)
+
+        cnt_total += 1 
+    
+        if not p.is_installed():
+            cnt_installed += 1
+            continue        
+
+        cnt_not_installed += 1
+        
+    
+        if hashdb.sig_present(p.get_signature()):
+            cnt_already += 1
             continue
         
         # print "==="
         # print json.dumps(p, indent=4)
         # print "---"
         crawl1(p)
+        cnt_new += 1
+        time.sleep(delay)
         
-    return
-
-    dpkginfo = os.path.join(root, 'var/lib/dpkg/info')
-
-    for filename in os.listdir(dpkginfo):
-        if not filename.endswith('.list'):
-            continue
-            
-        path = os.path.join(dpkginfo, filename)
-        pkgname = file2pkgname(filename)
-        print "===", pkgname, filename, "==="
-        with open(path,'r') as fh:
-            for line in fh:
-                fullpath = os.path.join(root, line.rstrip()[1:])
-                try:
-                    f = files.getbypath(fullpath)
-                    print f
-                except KeyError:
-                    print ".. {} not in files".format(fullpath)
+    print("Crawling done ({:.2f})".format(time.time() - started))
+    print("total: {} installed: {}, not installed: {}, already in hashdb: {}, new: {}".format(
+            cnt_total, cnt_installed, cnt_not_installed, cnt_already, cnt_new
+        ))
 
 
+def get(hashstr):
+
+    try:
+        url = hashdb.phash2url(hashstr)
+        # package hash
+        print("url:", url)
+    except KeyError:
+        # file in hash
+        phash = hashdb.fhash2phash(hashstr)
+        url = hashdb.phash2url(hashstr)
+
+    
+        
 def main():
 
     global log, hashdb
 
     def_anchsz = 100*1024
     def_filesz = 1024
-    def_hashserver = 'http://debsnap.okerr.com/'
+    def_hashserver = 'http://hashget.okerr.com/'
     def_project = 'DEBSNAP'
-    def_excludefile = os.path.expanduser("~/debsnap-exclude") 
-
-
+    def_excludefile = os.path.expanduser("~/hashget-exclude") 
     def_skipdirs = ['var/cache/','var/lib/apt/']
+    def_sleep = 2
 
-    parser = argparse.ArgumentParser(description='debsnap deduplicator')
+    parser = argparse.ArgumentParser(description='HashGet fetcher and deduplicator')
 
     g = parser.add_argument_group('Commands')
-    g.add_argument('--prepack', default=None, metavar='DIR', help='prepare DIR for snap-tarring')
+    g.add_argument('--get', default=None, metavar='HASH', help='get file by hash')
+    g.add_argument('--prepack', '-p', default=None, metavar='DIR', help='prepare DIR for hash-tarring')
     g.add_argument('--crawl', default=None, metavar='DIR', help='snapshot crawl packages in DIR')
-    g.add_argument('--postunpack', default=None, metavar='DIR', help='post-unpack')
+    g.add_argument('--postunpack', '-u', default=None, metavar='DIR', help='post-unpack')
 
     g.add_argument('--fetch', default=None, help='BROKEN? fetch .deb file by name')
 
@@ -327,6 +359,7 @@ def main():
     g.add_argument('--project', default=def_project, help='project name ({})'.format(def_project))
     g.add_argument('--repo', nargs=2, action='append', metavar=('REPO_TAG', 'REPO_URL'), default=list(), help='repositories (many)')
     g.add_argument('-X','--exclude-from', metavar='FILENAME', dest='excludefile', default=def_excludefile, help='Exclude file (for -X tar option) ({})'.format(def_excludefile))
+    g.add_argument('--sleep', type=int, default=def_sleep, help='delay ({}s)'.format(def_sleep))
 
 
     g = parser.add_argument_group('Target system specification')
@@ -341,7 +374,7 @@ def main():
 
     args = parser.parse_args()
 
-    hashdb = debsnap.DirHashDB()
+    hashdb = hashget.DirHashDB()
 
     # configure logging
     FORMAT = '%(asctime)s %(message)s'
@@ -366,14 +399,14 @@ def main():
         if e.startswith("REPO_"):
             rname = e[len("REPO_"):]
             repo[rname] = os.environ[e]
-            print "import repo {} {} from env".format(rname, repo[rname])
+            print("import repo {} {} from env".format(rname, repo[rname]))
 
     for r in args.repo:
         repo[r[0]]=r[1]
-        print "import repo {} {} from args".format(rname, repo[rname])            
-
+        print("import repo {} {} from args".format(rname, repo[rname]))
+        
     if args.crawl:
-        crawl_packages(args.crawl)
+        crawl_packages(args.crawl, args.sleep)
 
     if args.prepack:
         
@@ -393,4 +426,11 @@ def main():
     if args.fetch:
         fetch(args.hashserver, args.project, args.fetch)
 
+    if args.get:
+        print("get", args.get)
+        get(args.get)
+
 main()
+
+
+
