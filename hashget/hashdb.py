@@ -9,23 +9,22 @@ class HashPackage(object):
         represents one hashpackage, e.g. one .deb file or .tar.gz, downloaded from one URL
     """
     
-    fields = ['url', 'files', 'anchors', 'sha256', 'md5', 'signature']
+    fields = ['url', 'files', 'hashes', 'anchors', 'signatures']
     
-    def __init__(self, url=None, anchors=None, files=None, sha256=None, md5=None, attrs=None, signature=None):
+    def __init__(self, url=None, anchors=None, files=None, hashes=None, attrs=None, signatures=None):
         self.url = url
         self.anchors = anchors
         self.files = files                
-        self.md5 = md5
-        self.sha256 = sha256
+        self.hashes = hashes
         self.attrs = attrs or dict()
-        self.signature = signature
+        self.signatures = signatures
 
     def __eq__(self, obj):
         return (self.url == obj.url
                 and self.anchors == obj.anchors
                 and self.files == obj.files
                 and self.attrs == obj.attrs
-                and self.signature == obj.signature)
+                and self.signatures == obj.signatures)
     
     @staticmethod
     def load(stream):
@@ -43,6 +42,11 @@ class HashPackage(object):
     def __repr__(self):
         basename = self.url.split('/')[-1]
         return "{} ({}/{})".format(basename, len(self.anchors), len(self.files))
+    
+    def get_phash(self):
+        for hspec in self.hashes:
+            if hspec.startswith('sha256:'):
+                return hspec 
     
     def json(self):
         data = dict()
@@ -111,24 +115,32 @@ class DirHashDB(HashDB):
             with open(os.path.join(self.path, f)) as f:
 
                 hp = HashPackage().load(f)
+                phash = hp.get_phash()
 
-                self.h2url[hp.sha256] = hp.url
+                for hsum in hp.hashes:                                                            
+                    self.h2url[hsum] = hp.url
 
                 for hpf in hp.files:
-                    self.fh2ph[hpf] = hp.sha256
+                    self.fh2ph[hpf] = phash
                     
-                if hp.signature:
-                    self.sig2hash[hp.signature] = hp.sha256                                            
+                if hp.signatures:
+                    for sigtype, sig in hp.signatures.items():
+                        if not sigtype in self.sig2hash:
+                            self.sig2hash[sigtype]=dict()
+                        self.sig2hash[sigtype][sig] = phash                                            
 
     def hash2url(self, hashspec):
+    
         if hashspec in self.h2url:
             return self.h2url[hashspec]
         
         if hashspec in self.fh2ph:
             phash = self.fh2ph[hashspec]
             return self.h2url[phash]
+
+        #print(json.dumps(self.fh2ph, indent=4))
     
-        raise KeyError('Hashspec {} not found neither in package hashes nor in file hashes')
+        raise KeyError('Hashspec {} not found neither in package hashes nor in file hashes'.format(hashspec))
 
     def fhash2phash(self, hsum):
         """
@@ -142,8 +154,8 @@ class DirHashDB(HashDB):
         """
         return self.h2url[hsum]
     
-    def sig_present(self, sig):
-        return sig in self.sig2hash
+    def sig_present(self, sigtype, sig):
+        return ((sigtype in self.sig2hash) and (sig in self.sig2hash[sigtype]))
         
     
     # HashDB.submit

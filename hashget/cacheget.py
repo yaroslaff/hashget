@@ -3,12 +3,16 @@ from urllib.parse import urlparse
 import tempfile
 import requests
 import time
+import logging
 
 from .utils import kmgt
 
+opt_verify_etag = True
+
 class CacheGet():
     
-    def __init__(self, cachedir = None, tmpdir = None, tmpprefix = None):
+    def __init__(self, cachedir = None, tmpdir = None, tmpprefix = None, log=None):
+
 
         if cachedir:
             self.cachedir = cachedir
@@ -23,19 +27,15 @@ class CacheGet():
         
         self.tmpdir = tmpdir or '/tmp/'
         self.tmpprefix = tmpprefix or 'CacheGet-'
-    
-    
-    def get(self, url, headers=None, log=None):
-
-        def logdebug(msg):
-            # print msg
-            pass
-
-        logerror = logdebug
+        self.log = log or logging.getLogger('dummy')
+        
+    def get(self, url, headers=None):
 
         headers = headers or dict()
         out = dict()
         out['url'] = url
+        out['downloaded'] = 0
+        out['cached'] = 0
        
         etag = None
        
@@ -44,7 +44,6 @@ class CacheGet():
         
         # local_filename = os.path.join(prefix, basename)
         parsed = urlparse(url)
-        tmpfh, tmppath = tempfile.mkstemp(prefix=self.tmpprefix, dir=self.tmpdir) 
         
         local_filename = os.path.join(self.cachedir, 'files', parsed.scheme, parsed.netloc, parsed.path[1:])
         local_dir = os.path.dirname(local_filename)  
@@ -61,10 +60,12 @@ class CacheGet():
             os.makedirs(local_dir)
         
         # maybe reuse cached?
-        if os.path.isfile(local_filename) and not etag:
+        if os.path.isfile(local_filename) and (not etag or not opt_verify_etag):
+            self.log.debug('reuse cached file ' + local_filename )
             # have cached and will not (cannot) verify
             out['file'] = local_filename
             out['size'] = os.stat(local_filename).st_size
+            out['cached'] = os.stat(local_filename).st_size
             return out
 
 
@@ -76,7 +77,7 @@ class CacheGet():
         reported_size = 0
         report_each = 1024*1024*10
 
-        logdebug('downloading {} to {}'.format(url, local_filename))
+        self.log.debug('downloading {} to {}'.format(url, local_filename))
         # NOTE the stream=True parameter
 
 
@@ -85,8 +86,7 @@ class CacheGet():
             try:
                 r = requests.get(url, stream=True, headers=headers)
             except requests.exceptions.RequestException as e:
-                if log:
-                    log.debug('download error {}: {}. Retry.'.format(url, str(e)))
+                self.log.debug('download error {}: {}. Retry.'.format(url, str(e)))
                 time.sleep(10)
 
         out['code'] = r.status_code
@@ -101,31 +101,31 @@ class CacheGet():
             # not modified
             out['file'] = local_filename
             out['size'] = os.stat(local_filename).st_size
+            out['cached'] = os.stat(local_filename).st_size
             return out
         
         if r.status_code != 200:
-            if log:
-                log.error("DOWNLOAD ERROR {} {}".format(r.status_code, url))
+            self.log.error("DOWNLOAD ERROR {} {}".format(r.status_code, url))
             return None
                         
-        
+        tmpfh, tmppath = tempfile.mkstemp(prefix=self.tmpprefix, dir=self.tmpdir)         
         for chunk in r.iter_content(chunk_size=chunk_size): 
             if chunk: # filter out keep-alive new chunks
                 os.write(tmpfh, chunk)
                 total_size += len(chunk)
                 if(total_size >= reported_size + report_each):
-                    if log:
-                        log_debug('... saved {}...'.format(kmgt(total_size, frac=0)))
+                    self.log_debug('... saved {}...'.format(kmgt(total_size, frac=0)))
                     reported_size = total_size
         os.close(tmpfh)
         
         os.rename(tmppath, local_filename)
                     
 
-        logdebug('download {} status code: {}'.format(kmgt(total_size), r.status_code))
+        self.log.debug('download {} status code: {}'.format(kmgt(total_size), r.status_code))
         
         out['file'] = local_filename
         out['size'] = os.stat(local_filename).st_size
+        out['downloaded'] = os.stat(local_filename).st_size
         return out
             
         

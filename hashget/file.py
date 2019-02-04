@@ -29,6 +29,25 @@ class Hashes():
         
         return h.hexdigest()            
 
+    def get_hashspec(self):
+        return 'sha256:'+self.sha256
+
+    def match_hashspec(self, hashspec):
+    
+        spec, hsum = hashspec.split(':',1)
+    
+        if spec == 'sha256':
+            return self.sha256 == hsum
+            
+        if spec == 'md5':
+            return self.md5 == hsum
+            
+        raise ValueError('Bad hashspec format: {}'.format(hashspec))
+    
+    def __repr__(self):
+        return 'sha256:{} md5:{}'.format(self.sha256, self.md5)
+        
+    
 
 class File():
     
@@ -42,6 +61,9 @@ class File():
             self.read(filename, root)
     
     def read(self, filename=None, root=None):
+        """
+            read all info about file
+        """
         self.filename = filename            
 
         stat = os.stat(self.filename)
@@ -63,7 +85,9 @@ class File():
 
     def __repr__(self):
         return "{} {} {} {}:{}".format(self.filename, self.hashes.md5, kmgt(self.size), self.uid, self.gid)
-        
+    
+    def get_hashspec(self):
+        return self.hashes.get_hashspec()
 
     @classmethod
     def from_dict(cls, d, root):

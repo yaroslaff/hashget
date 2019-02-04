@@ -12,6 +12,7 @@ import time
 import logging
 import tempfile
 import hashlib
+import shutil
 
 from requests.packages.urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
@@ -92,12 +93,13 @@ def fetch(hashserver, project, deb):
 
 def prepare(root, hashdb, anchsz, filesz, skipdirs, excludefile):
     """
-        ANCHORS ???
+        ANCHORS ??? do we need it here? maybe delete?
     """
 
     files = prepare_readfiles(root, anchsz, filesz, skipdirs)
+    log.debug('files are ready')
     ph = dict() # package hashes to URLs
-    hlist = hashget.hashlist.hashlist()
+    rfile = hashget.restorefile.restorefile()
     
     with open(excludefile,'w') as excf:
         for f in files:
@@ -106,19 +108,20 @@ def prepare(root, hashdb, anchsz, filesz, skipdirs, excludefile):
                     save url and package hashes, then write to snf
                     write file info to snf
                 """
-                phash = hashdb.fhash2phash(f.hashes.sha256)
+                hashspec = f.get_hashspec()
+                phash = hashdb.fhash2phash(hashspec)
                 ph[phash] = hashdb.phash2url(phash)
                 excf.write("{}\n".format(os.path.relpath(f.filename, root)))    
-                hlist.add_file(f)
+                rfile.add_file(f)
                     
             except KeyError:
                 # unique file, not found in any packages
                 pass
                 
         for ph, purl in ph.items():
-            snap.add_package(url = purl, sha256 = ph)
+            rfile.add_package(url = purl, hashspec = ph)
         
-        hlist.save(os.path.join(root,'.hashlist'))
+        rfile.save(os.path.join(root,'.hashget-restore'))
 
     # guess_packages(root, files)
 
@@ -165,58 +168,53 @@ def prepare_readfiles(root, anchsz, filesz, skipdirs):
 # PostUnpack
 #
 def postunpack(root, hashdb):
-    print("postunpack: " + root)
     cg = hashget.CacheGet()
 
-    snap = hashget.snapfile.snapfile(os.path.join(root, '.hashist'))
-    snap.preiteration()
-    print(snap)
+    rfile = hashget.restorefile.restorefile(os.path.join(root, '.hashget-restore'))
+    rfile.preiteration()
     
-    tdir = tempfile.mkdtemp(prefix='hashget-postunpack-')
+    stat_cached = 0
+    stat_downloaded = 0
+    stat_recovered = 0
+    stat_files = 0
+    started = time.time()
     
-    for purl in snap.packages():
-        pbasename = purl.split('/')[-1]
-        ptdir = os.path.join(tdir, pbasename)
-        os.mkdir(ptdir)
+    for purl in rfile.packages():
+        #pbasename = purl.split('/')[-1]
+        #ptdir = os.path.join(tdir, pbasename)
+        #os.mkdir(ptdir)
 
-        lp = cg.get(purl)
+        # lp = cg.get(purl)
         
-        hashget.unpack_deb(lp['file'], ptdir)
-    
-        for r, dirs, files in os.walk(ptdir):
-            for basename in files:
-                        
-                fpath = os.path.join(r, basename)
-                if not os.path.isfile(fpath) or os.path.islink(fpath):
-                    continue
-
-                h = hashlib.sha256()
-                
-                with open(fpath, 'rb') as f:
-                    while True:
-                        data = f.read(BUF_SIZE)
-                        if not data:
-                            break
-                        h.update(data)
-                
-                sha256 = h.hexdigest()            
-
-                try:
-                    f = snap.fbyhash(sha256)
-                    f.recover(fpath)
-                    print(f.filename)
-                    # snap.set_processed(sha256)
-                except LookupError as e:
-                    # print "not found: {}".format(e)
-                    continue
-    
-    for f in snap.files():
-        # print "look for", f.hashes.sha256
-        phash = hashdb.fhash2phash(f.hashes.sha256)
-        # print phash
-    
-        # get from hashdb
+        log.debug('restore from URL ' + purl)
+        p = hashget.package.Package(url = purl)
+        p.download()
+        p.hash_content()
         
+        for pf in p.files:
+            hashspec = pf.get_hashspec()
+            try:
+                rf = rfile.fbyhash(hashspec)
+            except LookupError:
+                pass
+            else:
+                print('recovered ' + rf.filename)
+                rf.recover(pf.filename)
+                stat_recovered += rf.size
+                stat_files += 1
+                
+        stat_cached += p.stat_cached
+        stat_downloaded += p.stat_downloaded
+        p.cleanup()                        
+    
+    log.debug('Recovered {} files {} bytes ({} downloaded, {} cached) in {:.2f}s'.format(
+            stat_files,
+            kmgt(stat_recovered),
+            kmgt(stat_downloaded),
+            kmgt(stat_cached),
+            time.time() - started
+        ))
+    
     # delete tmpdir
 
 #
@@ -316,12 +314,26 @@ def debcrawl_packages(root, delay=0):
         ))
 
 
-def get(hashspec):
+def get(hashspec, outdir):
 
     url = hashdb.hash2url(hashspec)
 
-    p = hashget.package.Package(url = url)
-    print(p)
+    p = hashget.package.Package(url = url, log=log)
+    p.download()
+    if p.hashes.match_hashspec(hashspec):
+        dst = os.path.join(outdir, p.basename)
+        shutil.copy(p.path, dst)
+        log.info(dst)
+        return dst
+
+    log.debug('package not matches hashspec {}'.format(hashspec))
+    
+    src = p.hash2path(hashspec)    
+    dst = os.path.join(outdir, os.path.basename(src))
+    shutil.copy(src, dst)
+    p.cleanup() 
+    log.info(dst)
+    
     
         
 def main():
@@ -335,6 +347,7 @@ def main():
     def_excludefile = os.path.expanduser("~/hashget-exclude") 
     def_skipdirs = ['var/cache/','var/lib/apt/']
     def_sleep = 2
+    def_outdir = '.'
 
     parser = argparse.ArgumentParser(description='HashGet fetcher and deduplicator')
 
@@ -357,7 +370,8 @@ def main():
     g.add_argument('--repo', nargs=2, action='append', metavar=('REPO_TAG', 'REPO_URL'), default=list(), help='repositories (many)')
     g.add_argument('-X','--exclude-from', metavar='FILENAME', dest='excludefile', default=def_excludefile, help='Exclude file (for -X tar option) ({})'.format(def_excludefile))
     g.add_argument('--sleep', type=int, default=def_sleep, help='delay ({}s)'.format(def_sleep))
-
+    g.add_argument('--outdir', '-o', default=def_outdir, help='dir where to store --get files ({})'.format(def_outdir))
+    g.add_argument('--etag', default=False, action='store_true', help='verify HTTP E-Tag when reuse cached files')
 
     g = parser.add_argument_group('Target system specification')
     g.add_argument('--skip', nargs='*', default=def_skipdirs, help='Do not try to dedup these dirs ({}). Relative to --prepare path'.format(def_skipdirs))
@@ -374,7 +388,6 @@ def main():
     hashdb = hashget.DirHashDB()
 
     # configure logging
-    FORMAT = '%(asctime)s %(message)s'
     if args.verbose:
         loglevel = logging.DEBUG
     else:
@@ -383,13 +396,15 @@ def main():
     if args.quiet:
         loglevel = logging.ERROR
 
-    logging.basicConfig(level = loglevel, format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    hashget.cacheget.opt_verify_etag = args.etag
+
+    # logging.basicConfig(level = loglevel, format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    logging.basicConfig(level = loglevel, format='%(message)s')
     log = logging.getLogger('slowget')
     if args.logfile:
         fh = logging.FileHandler(args.logfile)
         fh.setFormatter(logging.Formatter(FORMAT, datefmt='%Y-%m-%d %H:%M:%S'))
         log.addHandler(fh)
-
 
 
     for e in os.environ:        
@@ -424,8 +439,7 @@ def main():
         fetch(args.hashserver, args.project, args.fetch)
 
     if args.get:
-        print("get", args.get)
-        get(args.get)
+        get(args.get, args.outdir)
 
 main()
 

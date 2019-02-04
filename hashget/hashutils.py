@@ -24,34 +24,6 @@ def get_hash(filename, hashmethod=None):
     return h.hexdigest()
 
 
-def dircontent(root):
-    """
-        Yields all elements of directory (recursively). Starting from top. Good for chmod.
-        Do not follow symlinks
-    """
-    for i in os.listdir(root):
-        path = os.path.join(root, i)
-        if os.path.islink(path):
-            yield path
-        elif os.path.isdir(path):
-            yield path            
-            for subpath in dircontent(path):
-                yield subpath                
-        else:
-            yield path
-
-def rmrf(dirname):
-    for path in dircontent(dirname):
-        if not os.path.islink(path):
-            os.chmod(path, 0o777)
-    shutil.rmtree(dirname)
-
-def rmlinks(dirname):
-    for path in dircontent(dirname):
-        if os.path.islink(path):
-            os.unlink(path)   
-
-
 def unpack_deb(filename, dirname):
     code = subprocess.call( ['dpkg', '-x', filename, dirname ])
     if code != 0:

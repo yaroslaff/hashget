@@ -1,8 +1,9 @@
 import json
 import os
 from .file import File
+from . import utils
 
-class hashfile(object):
+class restorefile(object):
     
     def __init__(self, path=None):
         self.path = path
@@ -21,12 +22,15 @@ class hashfile(object):
             f = File.from_dict(fdata, self.root)
             yield f
 
-    def fbyhash(self, h):
+    def fbyhash(self, hashspec):
+    
+        spec, hsum = hashspec.split(':')
+    
         for fdata in self.data['files']:
-            if fdata['sha256'] == h:
+            if fdata[spec] == hsum:
                 f = File.from_dict(fdata, self.root)
                 return f
-        raise LookupError('No file with hash {}'.format(h))
+        raise LookupError('No file with hash {}'.format(hashspec))
             
     def packages(self):
         for pdata in self.data['packages']:
@@ -35,10 +39,10 @@ class hashfile(object):
     def add_file(self, f):
         self.data['files'].append(f.to_dict())
 
-    def add_package(self, url, sha256):
+    def add_package(self, url, hashspec):
         p = dict()
         p['url'] = url
-        p['sha256'] = sha256
+        p['hash'] = hashspec
         self.data['packages'].append(p)
     
     def save(self, path):
@@ -58,7 +62,13 @@ class hashfile(object):
     def preiteration(self):
         for fdata in self.data['files']:
             fdata['processed'] = False     
-     
+  
+    def sumsize(self):
+        sumsize = 0
+        for fd in self.files:
+            sumsize += fd['size']
+        return sumsize
+            
     def __repr__(self):
-        return 'snap: {} files, {} pkgs'.format(len(self.data['files']), len(self.data['packages']))
+        return 'snap: {} files, {} pkgs, size: {}'.format(len(self.data['files']), len(self.data['packages']), utils.kmgt(self.sumsize()))
         

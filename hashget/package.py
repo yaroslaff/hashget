@@ -1,12 +1,61 @@
+import logging
+import filetype
+from tempfile import mkdtemp
+import os
+import subprocess
+
+
+from . import cacheget
+from . import file
+from . import utils
+
 class Package(object):
         
-    def __init__(self, path=None, url=None):
+    def __init__(self, path=None, url=None, log=None):
         self.path = path
         self.url = url
         self.unpacked = None
         self.base_tmpdir = '/tmp'
         self.tmpdir = None
+        self.loghandler = log
+        self.log = log or logging.getLogger('dummy')
+        self.hashes = None
+        self.basename = None
+        self.files = list()
 
+        self.stat_downloaded = 0
+        self.stat_cached = 0
+
+        if self.path:
+            accept_file()
+    
+    def accept_file(self):
+        self.hashes = file.Hashes(self.path)
+        self.basename = os.path.basename(self.path)
+    
+    def hash2path(self, hashspec):
+        self.unpack()        
+        self.hash_content()
+        self.log.debug('look for ' + hashspec)
+        for f in self.files:
+            if f.hashes.match_hashspec(hashspec):
+                return f.filename
+    
+    def hash_content(self):
+        
+        if self.files:
+            # files are already hashed
+            return
+
+        if not self.unpacked:
+            self.unpack()
+            
+        for path in utils.dircontent(self.unpacked):
+            if os.path.isfile(path) and not os.path.islink(path):
+                self.files.append(file.File(path, root=self.unpacked))
+            
+            
+    
     def unpack(self):
 
         def dircontent(root):
@@ -33,19 +82,22 @@ class Package(object):
 
 
         if self.unpacked: return self.unpacked 
-        self.download()
 
-        k = filetype.guess(str(filename))
+        # self.download()
+
+        k = filetype.guess(str(self.path))
 
         if k is None:
             raise("ERROR Cannot get filetype for {}".format(filename))
 
         if k.mime == 'application/x-deb':
-            self.tmpdir = mkdtemp(prefix='debsnap-{}-'.format(os.path.basename(self.path)), dir=self.base_tmpdir)
+            self.unpacked = mkdtemp(prefix='hashget-deb-{}-'.format(os.path.basename(self.path)), dir=self.base_tmpdir)
             #print "tdir:", tdir
             # Archive(filename).extractall(tdir)
-            Package.unpack_deb(self.path, self.tmpdir)
+            Package.unpack_deb(self.path, self.unpacked)
             self.rmlinks()
+            return self.unpacked
+        
     
     @staticmethod            
     def unpack_deb(filename, dirname):
@@ -58,9 +110,18 @@ class Package(object):
         """ remove symlinks from tmp dir """
     
     def download(self):
+        
         if self.path:
             """ already downloaded """
             return self.path
+     
+        cg = cacheget.CacheGet(log = self.loghandler)
+        r = cg.get(self.url)
+        self.stat_cached += r['cached']
+        self.stat_downloaded += r['downloaded']
+        self.path = r['file']
+        self.accept_file()
+        return self.path
      
     def scan_hashes(self, filename, minsz=0, maxn=3, log=None):
         tmpdir = '/tmp'
@@ -134,3 +195,21 @@ class Package(object):
             
             return (out_anchors, hashes)   
 
+    def __repr__(self):
+        text = 'package ['
+        if self.url:
+            text += ' url: ' + self.url
+        
+        if self.path:
+            text += ' path:' + self.path
+            
+        if self.unpacked:
+            text += ' unpacked:' + self.unpacked
+              
+        text += ' ]'
+        return text
+        
+    def cleanup(self):
+        if self.unpacked:
+            self.log.debug("clean dir " + self.unpacked)
+            utils.rmrf(self.unpacked)
