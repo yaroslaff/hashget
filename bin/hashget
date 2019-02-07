@@ -398,23 +398,24 @@ def main():
         # ensure debsnap project exists
         hashdb.create_project('debsnap')
 
-        for debsig, url in debcrawl_packages(args.debcrawl):
+        for p in debcrawl_packages(args.debcrawl):
 
             cnt_total += 1
 
-            if hashdb.sig_present('deb', debsig):
-                print("already have {}".format(debsig))
+
+            if hashdb.sig_present('deb', p.signature):
+                print("already have {}".format(p.signature))
                 cnt_already += 1
                 continue
 
-            print("crawl {}".format(url))
+            print("crawl {}".format(p.url))
 
             signatures = {
-                'deb': debsig
+                'deb': p.signature
             }
 
             submit_url(
-                url = url,
+                url = p.url,
                 project = 'debsnap',
                 anchsz = args.anchsz,
                 filesz = args.filesz,

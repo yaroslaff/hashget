@@ -160,8 +160,7 @@ def debcrawl_packages(root):
     status = load_release(os.path.join(root, 'var/lib/dpkg/status'))
 
     for pdict in status:
-
         p = DebPackage(info=pdict)
         if not p.is_installed():
            continue
-        yield(p.signature, p.url)
+        yield(p)
