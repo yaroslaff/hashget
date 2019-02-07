@@ -6,14 +6,12 @@
 #
 # do not download selfhash file if it's in hashdb or in prepacking dir
 # 
-# how to store hashdb files (possible filenames collision). maybe projects? (no collision allowed inside project)
-#  .N suffix for duplicates
-#  
-# hash directories?
-# 
-# 
 #
-
+# Network submit
+#
+#
+#
+#
 
 import argparse
 import os
@@ -31,12 +29,10 @@ import shutil
 
 from requests.packages.urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
-    
-
-#from debsnapm import load_release
 
 import hashget
 from hashget.utils import kmgt
+from hashget.debian import debcrawl_packages
 
 BUF_SIZE = 1024*1024
 
@@ -285,102 +281,6 @@ def submit_url(url, project, anchsz, filesz, fanchors=None, signatures=None):
         )
 
     hashdb.submit(hp, project=project)
-    
-#
-# Crawling
-#
-
-def crawl1(p):
-       
-    print("Crawl", p)
-    url = p.snapshot_url()    
-    
-    cg = hashget.CacheGet()
-    
-    get_started = time.time()
-    f = cg.get(url)
-
-    print(f['code'], kmgt(f['size']), f['url'])
-
-    #print json.dumps(f, indent=4)
-     
-
-    # calc package file hashes
-    fhashes = hashget.File(f['file'])
-    # print "FILE:", fhashes
-
-    attrs = dict() 
-    #{
-    #    'sha256': fhashes.hashes.sha256,
-    #    'md5': fhashes.hashes.md5
-    #    }
-
-    anchors, files = hashget.walk_arc(f['file'], minsz = 102400, log=log)
-    
-    
-    hp = hashget.HashPackage(
-            anchors = anchors,
-            files = files,
-            url = url,
-            attrs = attrs,
-            sha256 = fhashes.hashes.sha256,
-            md5 = fhashes.hashes.md5,
-            signature = p.get_signature()
-        )
-    
-    print("took: {:.2f}".format( time.time() - get_started ))
-
-    hashdb.submit(hp)
-
-def debcrawl_packages(root, delay=0):
-
-    cnt_total = 0
-    cnt_installed = 0
-    cnt_not_installed = 0
-    cnt_already = 0
-    cnt_new = 0
-    
-    started = time.time()
-
-    def file2pkgname(filename):
-        # delete suffix (.list) or :arch.list
-        if ':' in filename:
-            return filename.split(':')[0]
-        else:
-            return '.'.join(filename.split('.')[:-1])
-        
-
-    status = hashget.debian.load_release(os.path.join(root, 'var/lib/dpkg/status'))
-    
-    for pdict in status:
-        
-        p = hashget.debian.DebPackage(info = pdict)
-
-        cnt_total += 1 
-    
-        if not p.is_installed():
-            cnt_installed += 1
-            continue        
-
-        cnt_not_installed += 1
-        
-    
-        if hashdb.sig_present(p.get_signature()):
-            cnt_already += 1
-            continue
-        
-        # print "==="
-        # print json.dumps(p, indent=4)
-        # print "---"
-        crawl1(p)
-        cnt_new += 1
-        time.sleep(delay)
-        
-    print("Crawling done ({:.2f})".format(time.time() - started))
-    print("total: {} installed: {}, not installed: {}, already in hashdb: {}, new: {}".format(
-            cnt_total, cnt_installed, cnt_not_installed, cnt_already, cnt_new
-        ))
-
 
 def get(hashspec, outdir):
 
@@ -488,7 +388,46 @@ def main():
     """
      
     if args.debcrawl:
-        debcrawl_packages(args.crawl, args.sleep)
+
+        cnt_total = 0
+        cnt_already = 0
+        cnt_new = 0
+
+        started = time.time()
+
+        # ensure debsnap project exists
+        hashdb.create_project('debsnap')
+
+        for debsig, url in debcrawl_packages(args.debcrawl):
+
+            cnt_total += 1
+
+            if hashdb.sig_present('deb', debsig):
+                print("already have {}".format(debsig))
+                cnt_already += 1
+                continue
+
+            print("crawl {}".format(url))
+
+            signatures = {
+                'deb': debsig
+            }
+
+            submit_url(
+                url = url,
+                project = 'debsnap',
+                anchsz = args.anchsz,
+                filesz = args.filesz,
+                fanchors = args.fanchor,
+                signatures = signatures)
+
+            cnt_new += 1
+            time.sleep(args.sleep)
+
+        print("Crawling done in {:.2f}s. {} total, {} new, {} already in db.".format(time.time() - started, cnt_total, cnt_new, cnt_already))
+
+
+
 
     if args.prepack:
         

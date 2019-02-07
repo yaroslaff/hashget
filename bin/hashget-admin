@@ -14,7 +14,7 @@ import hashget
 parser = argparse.ArgumentParser(description='HashGet fetcher and deduplicator')
 
 g = parser.add_argument_group('Commands')
-g.add_argument('--status', default=None, nargs='?', const=True, metavar='NAME', help='status for --project or all projects')
+g.add_argument('--status', default=None, nargs='?', const=False, metavar='NAME', help='status for --project or all projects')
 g.add_argument('--list', default=False, action='store_true', help='briefly list all projects')
 g.add_argument('--addproject', default=None, metavar='NAME', help='create project')
 g.add_argument('--rmproject', default=None, metavar='NAME', help='delete project')

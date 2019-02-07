@@ -126,11 +126,20 @@ class DirHashDB(HashDB):
             self.__config['storage'] = value
 
     def read_config(self):
+
+        self.__config = {'storage': 'basename'}
+
         try:
             with open(os.path.join(self.path,'.options')) as f:
-                self.__config = json.load(f)
+                conf = json.load(f)
+            for k,v in conf.items():
+                self.__config[k] = v
         except FileNotFoundError:
             pass
+
+        # set default values
+
+
 
     def writehp(self, hp):
         """
@@ -306,7 +315,7 @@ class HashDBClient(HashDB):
                 pass
         raise KeyError("Not found in any of {} hashdb".format(len(self.hashdb)))
             
-    def submit(self, hp, project):
+    def submit(self, hp, project, create=False):
         hdb = self.hashdb[project]
 
         hdb.submit(hp)
@@ -314,12 +323,16 @@ class HashDBClient(HashDB):
 
     def create_project(self, name):
         project_path = os.path.join(self.path, name)
-        os.mkdir(project_path)
+        if not os.path.isdir(project_path):
+            os.mkdir(project_path)
+            self.hashdb[name] = DirHashDB(path=project_path)
 
     def remove_project(self, name):
         p = self.hashdb[name]
         shutil.rmtree(p.path)
 
+    def sig_present(self, sigtype, signature):
+        return any(x[1].sig_present(sigtype, signature) for x in self.hashdb.items())
 
     """
         HashDBClient

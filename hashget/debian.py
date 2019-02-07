@@ -1,7 +1,11 @@
 import json
 import requests
+import time
+import os
+
 from requests.packages.urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+
 from .cacheget import CacheGet
 
 
@@ -13,6 +17,7 @@ class DebPackage(object):
 
     def __init__(self, info=None):
         self.info = None        
+        self.__url = None
         if info:
             self.set_package_info(info)
 
@@ -26,14 +31,24 @@ class DebPackage(object):
         self.section = info['Section']
         self.version = info['Version']
         self.arch = info['Architecture']
-    
-    def get_signature(self):
-        return "{} {} {}".format(self.package, self.version, self.arch)        
+
+    @property
+    def signature(self):
+        return "{}_{}_{}".format(self.package, self.version, self.arch)
     
     def __repr__(self):
-        return self.get_signature()
-    
-    def snapshot_url(self):
+        return self.signature
+
+
+    @property
+    def url(self):
+        if self.__url:
+            return self.__url
+
+        self.__url = self.get_snapshot_url()
+        return self.url
+
+    def get_snapshot_url(self):
         prefix = 'http://snapshot.debian.org/mr/'
         aurl_prefix = 'http://snapshot.debian.org/archive'    
 
@@ -123,3 +138,30 @@ def load_release(filename):
     return data
 
 
+#
+# Crawling
+#
+
+
+def debcrawl_packages(root):
+    cnt_total = 0
+    cnt_installed = 0
+    cnt_not_installed = 0
+    cnt_already = 0
+    cnt_new = 0
+
+    def file2pkgname(filename):
+        # delete suffix (.list) or :arch.list
+        if ':' in filename:
+            return filename.split(':')[0]
+        else:
+            return '.'.join(filename.split('.')[:-1])
+
+    status = load_release(os.path.join(root, 'var/lib/dpkg/status'))
+
+    for pdict in status:
+
+        p = DebPackage(info=pdict)
+        if not p.is_installed():
+           continue
+        yield(p.signature, p.url)
