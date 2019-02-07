@@ -1,0 +1,64 @@
+#!/usr/bin/python3
+
+import os
+import sys
+import shutil
+import argparse
+
+import hashget
+
+
+"""
+    Create arguments
+"""
+parser = argparse.ArgumentParser(description='HashGet fetcher and deduplicator')
+
+g = parser.add_argument_group('Commands')
+g.add_argument('--status', default=None, nargs='?', const=True, metavar='NAME', help='status for --project or all projects')
+g.add_argument('--list', default=False, action='store_true', help='briefly list all projects')
+g.add_argument('--addproject', default=None, metavar='NAME', help='create project')
+g.add_argument('--rmproject', default=None, metavar='NAME', help='delete project')
+g.add_argument('--modify', default=None, help='modify project')
+
+
+g = parser.add_argument_group('Options')
+g.add_argument('--path', default=None, help='Path to local HashDB directories')
+# g.add_argument('--project', default=None, help='Project name')
+g.add_argument('--really', default=False, action='store_true', help='additonal flag for dangerous operations')
+g.add_argument('--storage', default=None, help='use this storage type for hashdb')
+
+
+args = parser.parse_args()
+hashdb = hashget.HashDBClient(path=args.path)
+
+if args.list:
+    for name, hdb in hashdb.items():
+        print(name, hdb)
+
+if args.status is not None:
+    for name, hdb in hashdb.hashdb.items():
+        if name == args.status or not args.status:
+            print(name, hdb)
+            hdb.dump()
+
+if args.addproject:
+    print("create project {}".format(args.addproject))
+    hashdb.create_project(args.addproject)
+
+if args.rmproject:
+    if not args.really:
+        print("Not --really ...")
+        sys.exit(1)
+
+    print("rm project {}".format(args.rmproject))
+    hashdb.remove_project(args.rmproject)
+
+
+if args.modify:
+    print("modify project {}".format(args.modify))
+    p = hashdb[args.modify]
+    if args.storage:
+        p.storage = args.storage
+        print(p.storage)
+        p.dump()
+        p.write()

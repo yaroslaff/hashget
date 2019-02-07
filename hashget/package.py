@@ -1,8 +1,10 @@
 import logging
 import filetype
 from tempfile import mkdtemp
+from collections import namedtuple
 import os
 import subprocess
+
 
 
 from . import cacheget
@@ -35,79 +37,37 @@ class Package(object):
     
     def hash2path(self, hashspec):
         self.unpack()        
-        self.hash_content()
+        self.read_files()
         self.log.debug('look for ' + hashspec)
         for f in self.files:
             if f.hashes.match_hashspec(hashspec):
                 return f.filename
     
-    def hash_content(self):
+    def read_files(self):
         
         if self.files:
             # files are already hashed
             return
 
-        if not self.unpacked:
-            self.unpack()
-            
+        # someone forgot to unpack before read_files
+        assert(self.unpacked)
+
         for path in utils.dircontent(self.unpacked):
             if os.path.isfile(path) and not os.path.islink(path):
                 self.files.append(file.File(path, root=self.unpacked))
             
             
     
-    def unpack(self):
-
-        def dircontent(root):
-            """
-                Yields all elements of directory (recursively). Starting from top. Good for chmod.
-                Do not follow symlinks
-            """
-            for i in os.listdir(root):
-                path = os.path.join(root, i)
-                if os.path.islink(path):
-                    yield path
-                elif os.path.isdir(path):
-                    yield path            
-                    for subpath in dircontent(path):
-                        yield subpath                
-                else:
-                    yield path
-
-        def rmlinks(dirpath):
-            for path in dircontent(dirpath):
-                if os.path.islink(path):
-                    os.unlink(path)   
-
-
-
-        if self.unpacked: return self.unpacked 
-
-        # self.download()
-
-        k = filetype.guess(str(self.path))
-
-        if k is None:
-            raise("ERROR Cannot get filetype for {}".format(filename))
-
-        if k.mime == 'application/x-deb':
-            self.unpacked = mkdtemp(prefix='hashget-deb-{}-'.format(os.path.basename(self.path)), dir=self.base_tmpdir)
-            #print "tdir:", tdir
-            # Archive(filename).extractall(tdir)
-            Package.unpack_deb(self.path, self.unpacked)
-            self.rmlinks()
-            return self.unpacked
+    def unpack(self):                
         
-    
-    @staticmethod            
-    def unpack_deb(filename, dirname):
-        code = subprocess.call( ['dpkg', '-x', filename, dirname ])
-        if code != 0:
-            log.error('ERROR unpack_deb({}, {})'.format(filename, dirname))
+        self.unpacked = utils.recursive_unpack(self.path)
 
-    
-    def rmlinks(self):
-        """ remove symlinks from tmp dir """
+        if self.unpacked:
+            # remove links
+            for f in utils.dircontent(self.unpacked):
+                if os.path.islink(f):
+                    os.unlink(f)
+        return self.unpacked            
     
     def download(self):
         
@@ -123,7 +83,7 @@ class Package(object):
         self.accept_file()
         return self.path
      
-    def scan_hashes(self, filename, minsz=0, maxn=3, log=None):
+    def UNUSED_scan_hashes(self, filename, minsz=0, maxn=3, log=None):
         tmpdir = '/tmp'
         
         log.debug('walk {}'.format(filename))
@@ -213,3 +173,4 @@ class Package(object):
         if self.unpacked:
             self.log.debug("clean dir " + self.unpacked)
             utils.rmrf(self.unpacked)
+            

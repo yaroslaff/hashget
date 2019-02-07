@@ -114,7 +114,7 @@ class CacheGet():
                 os.write(tmpfh, chunk)
                 total_size += len(chunk)
                 if(total_size >= reported_size + report_each):
-                    self.log_debug('... saved {}...'.format(kmgt(total_size, frac=0)))
+                    self.log.debug('... saved {}...'.format(kmgt(total_size, frac=0)))
                     reported_size = total_size
         os.close(tmpfh)
         

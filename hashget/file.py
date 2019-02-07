@@ -32,6 +32,9 @@ class Hashes():
     def get_hashspec(self):
         return 'sha256:'+self.sha256
 
+    def get_list(self):
+        return [ 'sha256:' + self.sha256, 'md5:' + self.md5 ]
+
     def match_hashspec(self, hashspec):
     
         spec, hsum = hashspec.split(':',1)
@@ -59,6 +62,12 @@ class File():
         
         if filename:
             self.read(filename, root)
+    
+    def basename(self):
+        return os.path.basename(self.filename)
+    
+    def relpath(self):
+        return os.path.relpath(self.filename, self.root)
     
     def read(self, filename=None, root=None):
         """
