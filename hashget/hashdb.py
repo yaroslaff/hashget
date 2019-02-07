@@ -354,3 +354,23 @@ class HashDBClient(HashDB):
         """
         return self.hashdb.get(name, default)
 
+    """
+        common search methods
+    """
+    def fhash2phash(self, hashspec):
+        for hdb in self.hashdb.values():
+            try:
+                return hdb.fhash2phash(hashspec)
+            except KeyError:
+                pass
+
+        raise KeyError
+
+    def phash2url(self, phash):
+        for hdb in self.hashdb.values():
+            try:
+                return hdb.phash2url(phash)
+            except KeyError:
+                pass
+
+        raise KeyError
