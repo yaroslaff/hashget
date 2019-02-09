@@ -308,7 +308,7 @@ class HashDBClient(HashDB):
                 self.hashdb[name] = DirHashDB(path = project_path)
 
     def hash2url(self, hspec):
-        for hdb in self.hashdb:
+        for hdb in self.hashdb.values():
             try:
                 return hdb.hash2url(hspec)
             except KeyError:

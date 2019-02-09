@@ -294,7 +294,6 @@ def get(hashspec, outdir):
         log.info(dst)
         return dst
 
-    log.debug('package not matches hashspec {}'.format(hashspec))
     
     src = p.hash2path(hashspec)    
     dst = os.path.join(outdir, os.path.basename(src))
