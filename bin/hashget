@@ -280,9 +280,33 @@ def submit_url(url, project, anchors, filesz, file=None, signatures=None):
     hashdb.submit(hp, project=project, file=p.path)
 
 
-def get(hashspec, outdir):
+def get_by_sig(sig, outdir):
+    try:
+        url = hashdb.sig2url(sig)
+    except KeyError:
+        log.error("sig {} not found in hashdb".format(sig))
+        return
 
-    url = hashdb.hash2url(hashspec)
+    p = hashget.package.Package(url = url, log=log)
+    p.download()
+    dst = os.path.join(outdir, p.basename)
+    shutil.copy(p.path, dst)
+    log.info(dst)
+    return dst
+
+def get_by_hashspec(hashspec, outdir):
+    """
+
+    :param spec: either hashspec (sha256:aabb...) or debsib
+    :param outdir:
+    :return:
+    """
+
+    try:
+        url = hashdb.hash2url(hashspec)
+    except KeyError:
+        log.error("{} not found in hashdb".format(hashspec))
+        return
 
     p = hashget.package.Package(url = url, log=log)
     p.download()
@@ -292,7 +316,7 @@ def get(hashspec, outdir):
         log.info(dst)
         return dst
 
-    src = p.hash2path(hashspec)    
+    src = p.hash2path(hashspec)
     dst = os.path.join(outdir, os.path.basename(src))
     shutil.copy(src, dst)
     p.cleanup() 
@@ -454,8 +478,15 @@ def main():
         fetch(args.hashserver, args.project, args.fetch)
 
     if args.get:
-        get(args.get, args.outdir)
-    
+        if args.get.startswith('sha256:'):
+            get_by_hashspec(args.get, args.outdir)
+        else:
+            if args.get.endswith('.deb'):
+                sig = args.get[:-4]
+            else:
+                sig = args.get
+            get_by_sig(sig, args.outdir)
+
     if args.submit:
 
         if not args.project:
@@ -476,6 +507,16 @@ def main():
 
         basename = url.split('/')[-1]
         debsig = '.'.join(basename.split('.')[:-1])
+
+        if hashdb.sig_present('url', url):
+            print("URL sig {} already in hashdb".format(url))
+            return
+
+
+        if hashdb.sig_present('deb', debsig):
+            print("deb sig {} already in hashdb".format(debsig))
+            return
+
 
         signatures = {
             'deb': debsig

@@ -247,6 +247,15 @@ class DirHashDB(HashDB):
             hp = HashPackage().load(path = os.path.join(self.path, subpath))
             self.submit(hp)
 
+    def sig2url(self, sig):
+        # print(json.dumps(self.sig2hash, indent=4))
+        for sigtype, sigdict in self.sig2hash.items():
+            if sig in sigdict:
+                phash = sigdict[sig]
+                return self.h2url[phash]
+
+        raise KeyError
+
     def hash2url(self, hashspec):
     
         if hashspec in self.h2url:
@@ -415,6 +424,15 @@ class HashDBClient(HashDB):
         self.hashserver.append(hs)
         if not '_cached' in self.hashdb:
             self.create_project('_cached')
+
+    def sig2url(self, sig):
+        for hdb in self.hashdb.values():
+            try:
+                return hdb.sig2url(sig)
+            except KeyError:
+                pass
+
+        raise KeyError("Not found sig {} in any of hashdb: {}".format(sig, self.hashdb.keys()))
 
     def hash2url(self, hspec):
         for hdb in self.hashdb.values():
