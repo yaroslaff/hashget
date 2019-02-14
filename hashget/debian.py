@@ -2,6 +2,7 @@ import json
 import requests
 import time
 import os
+from .utils import sha1sum
 
 from requests.packages.urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
@@ -108,7 +109,7 @@ def load_release(filename):
     
     array = False
     
-    with open(filename) as f:
+    with open(filename, encoding='utf-8') as f:
         for line in f:
             if line == '\n':
                 # list element
@@ -164,3 +165,39 @@ def debcrawl_packages(root):
         if not p.is_installed():
            continue
         yield(p)
+
+def debsig2path(sig):
+    sigbase = sig.split('_')[0]
+    path = list()
+
+    if sigbase.startswith('lib'):
+        path.append('lib' + sigbase[3])
+    else:
+        path.append(sigbase[0])
+
+    path.append(sigbase)
+    path.append(sig)
+    return path
+
+def deb2snapurl(path):
+    """
+    check .deb file, verify and return snapurl for it
+    :param path:
+    :return:
+    """
+    hsum = sha1sum(path)
+    url = 'http://snapshot.debian.org/mr/file/{}/info'.format(hsum)
+    r = requests.get(url)
+    if r.status_code != 200:
+        return None
+
+    data = r.json()
+
+    for r in data['result']:
+        if r['archive_name'] == 'debian':
+            url = 'http://snapshot.debian.org/archive/{archive_name}/{first_seen}{path}/{name}'.format(**r)
+            return url
+
+    r=data['results'][0]
+    url = '/'.join(['http://snapshot.debian.org/archive', r['archive_name'], r['first_seen'], r['path'], r['name']])
+    return url

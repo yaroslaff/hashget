@@ -65,10 +65,13 @@ class restorefile(object):
   
     def sumsize(self):
         sumsize = 0
-        for fd in self.files:
+        for fd in self.data['files']:
             sumsize += fd['size']
         return sumsize
             
     def __repr__(self):
-        return 'snap: {} files, {} pkgs, size: {}'.format(len(self.data['files']), len(self.data['packages']), utils.kmgt(self.sumsize()))
+        return '{} files, {} pkgs, size: {}'.format(
+                len(self.data['files']),
+                len(self.data['packages']),
+                utils.kmgt(self.sumsize()))
         

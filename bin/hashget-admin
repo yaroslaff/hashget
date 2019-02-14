@@ -6,6 +6,9 @@ import shutil
 import argparse
 
 import hashget
+from hashget.debian import debsig2path
+
+
 
 
 """
@@ -14,14 +17,17 @@ import hashget
 parser = argparse.ArgumentParser(description='HashGet fetcher and deduplicator')
 
 g = parser.add_argument_group('Commands')
-g.add_argument('--status', default=None, nargs='?', const=False, metavar='NAME', help='status for --project or all projects')
+g.add_argument('--status', default=None, action='store_true', help='status for --project or all projects')
 g.add_argument('--list', default=False, action='store_true', help='briefly list all projects')
-g.add_argument('--addproject', default=None, metavar='NAME', help='create project')
-g.add_argument('--rmproject', default=None, metavar='NAME', help='delete project')
-g.add_argument('--modify', default=None, help='modify project')
+g.add_argument('--addproject', default=False, action='store_true', help='create -p project')
+g.add_argument('--rmproject', default=False, action='store_true', help='delete -p project')
+g.add_argument('--modify', default=False, action='store_true', help='modify -p project')
+g.add_argument('--build', default=False, action='store_true', help='build static web HashDB')
 
 
 g = parser.add_argument_group('Options')
+g.add_argument('--project','-p', default=None, metavar='NAME', help='Project name')
+g.add_argument('--webroot','-w', default=None, metavar='PATH', help='Path to webroot')
 g.add_argument('--path', default=None, help='Path to local HashDB directories')
 # g.add_argument('--project', default=None, help='Project name')
 g.add_argument('--really', default=False, action='store_true', help='additonal flag for dangerous operations')
@@ -35,30 +41,64 @@ if args.list:
     for name, hdb in hashdb.items():
         print(name, hdb)
 
-if args.status is not None:
+if args.status:
     for name, hdb in hashdb.hashdb.items():
-        if name == args.status or not args.status:
+        if name == args.project or not args.project:
             print(name, hdb)
             hdb.dump()
 
 if args.addproject:
-    print("create project {}".format(args.addproject))
-    hashdb.create_project(args.addproject)
+    print("create project {}".format(args.project))
+    hashdb.create_project(args.project)
 
 if args.rmproject:
     if not args.really:
         print("Not --really ...")
         sys.exit(1)
 
-    print("rm project {}".format(args.rmproject))
-    hashdb.remove_project(args.rmproject)
+    print("rm project {}".format(args.project))
+    hashdb.remove_project(args.project)
 
 
 if args.modify:
-    print("modify project {}".format(args.modify))
-    p = hashdb[args.modify]
+    print("modify project {}".format(args.project))
+    p = hashdb[args.project]
     if args.storage:
         p.storage = args.storage
         print(p.storage)
         p.dump()
         p.write()
+
+if args.build:
+    webroot = args.webroot or hashdb.path
+
+    print("build web HashDB in {}".format(webroot))
+    for name, hdb in hashdb.hashdb.items():
+        if name == args.project or not args.project:
+            print(name)
+            for p in hdb.packages:
+                print(p)
+
+
+                for sigtype, sig in p.signatures.items():
+                    if sigtype == 'deb':
+                        subpath = '/'.join(['sig', 'deb'] + debsig2path(sig))
+                        linkpath = os.path.join(webroot, subpath)
+                        os.makedirs(os.path.dirname(linkpath), exist_ok=True)
+                        if not os.path.islink(linkpath):
+                            os.symlink(p.path, linkpath)
+
+                for a in p.hashes + p.anchors:
+                    spec, hsum = a.split(':',1)
+                    if spec != 'sha256':
+                        continue
+                    subpath = '/'.join(['a', hsum[0:2], hsum[2:4], hsum[4:6], hsum[6:]])
+                    linkpath = os.path.join(webroot, subpath)
+                    os.makedirs(os.path.dirname(linkpath), exist_ok=True)
+                    #relpath=os.path.relpath(p.path, os.path.dirname(linkpath))
+                    #print("{} {}".format(relpath, linkpath))
+                    if not os.path.islink(linkpath):
+                        os.symlink(p.path, linkpath)
+
+
+

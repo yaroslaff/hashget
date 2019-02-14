@@ -12,9 +12,15 @@ from . import file
 from . import utils
 
 class Package(object):
+    """
+        Represents universal interface to any kind of package, e.g. .deb or .tar.xz
+
+        Do not confuse it with HashPackage
+    """
         
     def __init__(self, path=None, url=None, log=None):
         self.path = path
+        self.package_size = 0
         self.url = url
         self.unpacked = None
         self.base_tmpdir = '/tmp'
@@ -24,18 +30,27 @@ class Package(object):
         self.hashes = None
         self.basename = None
         self.files = list()
+        self.sum_size = 0
 
         self.stat_downloaded = 0
         self.stat_cached = 0
 
         if self.path:
-            accept_file()
+            self.accept_file()
     
     def accept_file(self):
         self.hashes = file.Hashes(self.path)
         self.basename = os.path.basename(self.path)
+        self.package_size = os.path.getsize(self.path)
     
     def hash2path(self, hashspec):
+        """
+
+        :param hashspec: e.g. sha256:aabbcc...
+        :return: path on disk
+
+        used in --get <hashspec>
+        """
         self.unpack()        
         self.read_files()
         self.log.debug('look for ' + hashspec)
@@ -54,7 +69,9 @@ class Package(object):
 
         for path in utils.dircontent(self.unpacked):
             if os.path.isfile(path) and not os.path.islink(path):
-                self.files.append(file.File(path, root=self.unpacked))
+                f = file.File(path, root=self.unpacked)
+                self.files.append(f)
+                self.sum_size += f.size
             
             
     
@@ -82,78 +99,6 @@ class Package(object):
         self.path = r['file']
         self.accept_file()
         return self.path
-     
-    def UNUSED_scan_hashes(self, filename, minsz=0, maxn=3, log=None):
-        tmpdir = '/tmp'
-        
-        log.debug('walk {}'.format(filename))
-        
-        k = filetype.guess(str(filename))
-
-        if k is None:
-            log.error("ERROR Cannot get filetype for {}".format(filename))
-
-        if k.mime == 'application/x-deb':
-            tdir = mkdtemp(prefix='gethash-', dir=tmpdir)
-            #print "tdir:", tdir
-            # Archive(filename).extractall(tdir)
-            unpack_deb(filename, tdir)
-            rmlinks(tdir)
-            
-            anchors = list()
-            hashes = list()
-            amin = None
-            
-            for f in os.walk(tdir):
-                subpath = f[0][len(tdir):]
-                for fn in f[2]:
-                    filename = os.path.join(f[0], fn)
-                    if os.path.isfile(filename):
-                        filesz = os.stat(filename).st_size
-                        #try:
-                        #    unicode(filename, 'utf8')
-                        #except UnicodeDecodeError:
-                        #    log.error('skip file {} (bad file name). {} bytes'.format(filename, filesz))
-                        #    continue
-                        
-                        
-                            
-                        digest = get_hash(filename)
-                        # Hashes
-                        if filesz > 1024:
-                            hashes.append(digest)
-
-                        # Anchors
-                        if filesz > minsz:
-                            # maybe add to anchors
-                            if len(anchors) < maxn:
-                                # simple. new anchors
-                                # print p['basename'], "add new anchor"
-                                anchors.append( (filesz, digest) )
-                                if amin is None or filesz < amin:
-                                    amin = filesz
-                            else:
-                                # full anchor. maybe replace?
-                                if filesz > amin:
-                                    # replace
-                                    for aa in anchors:
-                                        if aa[0] == amin:
-                                            # print "{} delete {}, add {}".format(p['basename'], aa['size'], cc['size'])
-                                            anchors.remove(aa)
-                                            anchors.append( (filesz, digest) )
-                                            amin = min(anchors, key = lambda t: t[0])[0]
-                                            break
-                    else:
-                        log.debug("skip {} {}".format(ftype(filename), filename))
-                    
-            
-            rmrf(tdir)
-            out_anchors = list()
-            
-            for aa in anchors:
-                out_anchors.append(aa[1]) # add only hashsum
-            
-            return (out_anchors, hashes)   
 
     def __repr__(self):
         text = 'package ['
@@ -171,6 +116,5 @@ class Package(object):
         
     def cleanup(self):
         if self.unpacked:
-            self.log.debug("clean dir " + self.unpacked)
             utils.rmrf(self.unpacked)
             
