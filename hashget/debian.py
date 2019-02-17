@@ -2,6 +2,8 @@ import json
 import requests
 import time
 import os
+import logging
+
 from .utils import sha1sum
 
 from requests.packages.urllib3.util.retry import Retry
@@ -9,10 +11,17 @@ from requests.adapters import HTTPAdapter
 
 from .cacheget import CacheGet
 
+from .submiturl import submit_url
+from .hashpackage import HashPackage
 
 rsess = None
 
+log = logging.getLogger('hashget')
+
 class DebPackage(object):
+    """
+    For installed packages in var/lib/dpkg/status
+    """
     
     rsess = None
 
@@ -98,6 +107,30 @@ class DebPackage(object):
         return url
 
 
+class DebHashPackage(HashPackage):
+
+    pkgtype = 'debsnap'
+
+    def get_special_anchors(self):
+        def debsig2path(sig):
+            sigbase = sig.split('_')[0]
+            path = list()
+
+            if sigbase.startswith('lib'):
+                path.append('lib' + sigbase[3])
+            else:
+                path.append(sigbase[0])
+
+            path.append(sigbase)
+            path.append(sig)
+            return path
+
+        for sigtype, sig in self.signatures.items():
+            if sigtype == 'deb':
+                yield '/'.join(['sig', 'deb'] + debsig2path(sig))
+
+
+
 
 def load_release(filename):
     """
@@ -166,19 +199,6 @@ def debcrawl_packages(root):
            continue
         yield(p)
 
-def debsig2path(sig):
-    sigbase = sig.split('_')[0]
-    path = list()
-
-    if sigbase.startswith('lib'):
-        path.append('lib' + sigbase[3])
-    else:
-        path.append(sigbase[0])
-
-    path.append(sigbase)
-    path.append(sig)
-    return path
-
 def deb2snapurl(path):
     """
     check .deb file, verify and return snapurl for it
@@ -201,3 +221,39 @@ def deb2snapurl(path):
     r=data['results'][0]
     url = '/'.join(['http://snapshot.debian.org/archive', r['archive_name'], r['first_seen'], r['path'], r['name']])
     return url
+
+
+def debsubmit(hashdb, path, anchors, attrs=None):
+    url = deb2snapurl(path)
+    attrs = attrs or dict()
+
+    log.info("debsubmit from URL: {}".format(url))
+    assert(url.endswith('.deb'))
+
+    basename = url.split('/')[-1]
+    debsig = '.'.join(basename.split('.')[:-1])
+
+    if hashdb.sig_present('url', url):
+        raise ValueError("HashDB has URL sig {}".format(url))
+
+    if hashdb.sig_present('deb', debsig):
+        raise ValueError("HashDB has deb sig {}".format(debsig))
+
+    signatures = {
+        'deb': debsig
+    }
+
+    log.debug("submitting...")
+    hp = submit_url(
+        url = url,
+        file = path,
+        project = 'debsnap',
+        anchors = anchors,
+        # filesz=args.filesz,
+        signatures = signatures,
+        hashdb = hashdb,
+        attrs = attrs,
+        hpclass = DebHashPackage)
+    log.debug("submitted... {}".format(hp))
+
+    return hp

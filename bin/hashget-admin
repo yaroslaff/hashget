@@ -4,12 +4,58 @@ import os
 import sys
 import shutil
 import argparse
+import json
+import logging
+import time
 
 import hashget
-from hashget.debian import debsig2path
+from hashget import *
+
+from hashget.debian import debsubmit
+
+
+def process_submitted(hashdb, newdir, webroot=None):
+
+    log.debug("process submitted {} {}".format(newdir, webroot))
+
+    for name in os.listdir(newdir):
+        """ for each upload dir """
+        dir = os.path.join(newdir, name)
+        try:
+            with open(os.path.join(dir,'_meta.json')) as f:
+                meta = json.load(f)
 
 
 
+            pkgbasename = meta['files']['package']
+            debsig = pkgbasename[:-4] # strip .deb
+
+            if not hashdb.sig_present('deb',debsig):
+                for basename in os.listdir(dir):
+                    path = os.path.join(dir, basename)
+                    if path.endswith('.deb'):
+                        attrs = dict()
+                        attrs['uploaded_ip'] = meta['ip']
+                        attrs['uploaded_time'] = meta['time']
+
+                        hp = debsubmit(hashdb, path, anchors, attrs=attrs)
+                        log.info("after submit got hp: {} {}".format(type(hp), hp.path))
+
+                        if webroot:
+                            log.debug("call make anchors webroot: {}".format(webroot))
+                            hp.make_anchors(webroot)
+                        log.info('Submitted {} from {}'.format(hp, meta['ip']))
+        except (KeyError, FileNotFoundError):
+            pass
+
+        shutil.rmtree(dir)
+
+
+
+
+
+
+def_submitted = ('/var/run/takeup/uploads/new','/var/www/html/virtual/hashdb/hashdb')
 
 """
     Create arguments
@@ -22,20 +68,40 @@ g.add_argument('--list', default=False, action='store_true', help='briefly list 
 g.add_argument('--addproject', default=False, action='store_true', help='create -p project')
 g.add_argument('--rmproject', default=False, action='store_true', help='delete -p project')
 g.add_argument('--modify', default=False, action='store_true', help='modify -p project')
-g.add_argument('--build', default=False, action='store_true', help='build static web HashDB')
+g.add_argument('--build', default=None, metavar='WEBROOT', help='build static web HashDB')
+g.add_argument('--submitted', nargs='?', default=None, const=def_submitted, metavar='UPLOADS_DIR, WEBROOT_DIR',
+               help='process submitted packages ({})'.format(def_submitted))
+g.add_argument('--purge', nargs='+', default=None, metavar=('PkgBaseName','WebRoot'),
+               help='purge package and links. (search/delete links if --full)')
 
 
 g = parser.add_argument_group('Options')
 g.add_argument('--project','-p', default=None, metavar='NAME', help='Project name')
-g.add_argument('--webroot','-w', default=None, metavar='PATH', help='Path to webroot')
 g.add_argument('--path', default=None, help='Path to local HashDB directories')
 # g.add_argument('--project', default=None, help='Project name')
 g.add_argument('--really', default=False, action='store_true', help='additonal flag for dangerous operations')
+g.add_argument('--full', default=False, action='store_true', help='for --purge')
+
 g.add_argument('--storage', default=None, help='use this storage type for hashdb')
+g.add_argument('--pkgtype', default=None, help='use this pkgtype for hashdb')
+
+g.add_argument('--verbose', '-v', default=False, action='store_true', help='verbose logging')
+g.add_argument('--loop', default=False, action='store_true', help='work in loop (for --submitted)')
 
 
 args = parser.parse_args()
-hashdb = hashget.HashDBClient(path=args.path)
+
+log = logging.getLogger('hashget')
+
+if args.verbose:
+    loglevel = logging.DEBUG
+else:
+    loglevel = logging.INFO
+
+logging.basicConfig(level = loglevel, format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+hashdb = hashget.hashdb.HashDBClient(path=args.path)
+anchors = hashget.AnchorList()
 
 if args.list:
     for name, hdb in hashdb.items():
@@ -69,8 +135,15 @@ if args.modify:
         p.dump()
         p.write()
 
+    if args.pkgtype:
+        p.read_config()
+        p.pkgtype = args.pkgtype
+        p.write_config()
+
+    log.info(p)
+
 if args.build:
-    webroot = args.webroot or hashdb.path
+    webroot = args.build
 
     print("build web HashDB in {}".format(webroot))
     for name, hdb in hashdb.hashdb.items():
@@ -78,27 +151,27 @@ if args.build:
             print(name)
             for p in hdb.packages:
                 print(p)
+                p.make_anchors(webroot)
 
 
-                for sigtype, sig in p.signatures.items():
-                    if sigtype == 'deb':
-                        subpath = '/'.join(['sig', 'deb'] + debsig2path(sig))
-                        linkpath = os.path.join(webroot, subpath)
-                        os.makedirs(os.path.dirname(linkpath), exist_ok=True)
-                        if not os.path.islink(linkpath):
-                            os.symlink(p.path, linkpath)
-
-                for a in p.hashes + p.anchors:
-                    spec, hsum = a.split(':',1)
-                    if spec != 'sha256':
-                        continue
-                    subpath = '/'.join(['a', hsum[0:2], hsum[2:4], hsum[4:6], hsum[6:]])
-                    linkpath = os.path.join(webroot, subpath)
-                    os.makedirs(os.path.dirname(linkpath), exist_ok=True)
-                    #relpath=os.path.relpath(p.path, os.path.dirname(linkpath))
-                    #print("{} {}".format(relpath, linkpath))
-                    if not os.path.islink(linkpath):
-                        os.symlink(p.path, linkpath)
+if args.submitted:
+    if args.loop:
+        while True:
+            process_submitted(hashdb, *args.submitted)
+            time.sleep(5)
+    else:
+        process_submitted(hashdb, *args.submitted)
 
 
+if args.purge:
+    if len(args.purge) == 2:
+        webroot = args.purge[1]
+    else:
+        webroot = None
 
+    try:
+        p = hashdb.basename2hp(args.purge[0])
+    except KeyError as e:
+        print(e)
+    else:
+        p.purge(webroot=webroot, full=args.full)

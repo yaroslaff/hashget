@@ -4,83 +4,18 @@ import json
 import shutil
 import requests
 import urllib
-from .utils import kmgt
+import datetime
+import logging
+
+from .utils import kmgt, dircontent
 from .file import File
+from .package import Package
 # from tempfile import mkdtemp
+from .hashpackage import HashPackage
+from . import debian
 
+log = logging.getLogger('hashget')
 
-class HashPackage(object):
-    """
-        represents one hashpackage, e.g. one .deb file or .tar.gz, downloaded from one URL
-    
-        url - permanent url to download package
-        hashes - list of hashes of package file itself (sha256 + md5)        
-        anchors - list of anchors (and forced anchors) hashes (could be used to retrieve package files over network)
-        files - list of hashes of files
-        signatures - dict of signatures, e.g. {'url': 'http://...', 'deb': 'package.deb 1.0 i386'}
-        
-        attributes:
-            selfhash: True -- user should download package himself and scan it
-    
-    """
-    
-    fields = ['url', 'files', 'anchors', 'signatures','hashes', 'attrs']
-    
-    def __init__(self, url=None, anchors=None, files=None, hashes=None, attrs=None, signatures=None):
-        self.url = url
-        self.path = None
-        self.anchors = anchors
-        self.files = files                
-        self.hashes = hashes # list of hashspec for package file itself
-        self.attrs = attrs or dict()
-        self.signatures = signatures
-
-    def __eq__(self, obj):
-        return (self.url == obj.url
-                and self.anchors == obj.anchors
-                and self.files == obj.files
-                and self.attrs == obj.attrs
-                and self.signatures == obj.signatures)
-
-    def set_attr(self, name, value):
-        self.attrs[name] = value
-
-    @staticmethod
-    def load(path=None, stream=None, data = None):
-        hp = HashPackage()
-        if path:
-            hp.path = path
-            with open(path) as stream:
-                data = json.load(stream)
-        elif stream:
-            data = json.load(stream)
-        elif data:
-            pass
-        else:
-            raise(ValueError)
-
-        for name in data.keys():
-            setattr(hp, name, data[name])
-        return hp
-        
-    def __repr__(self):
-        basename = self.url.split('/')[-1]
-        return "{} ({}/{})".format(basename, len(self.anchors), len(self.files))
-    
-    def get_phash(self):
-        for hspec in self.hashes:
-            if hspec.startswith('sha256:'):
-                return hspec
-    
-    def json(self):
-        data = dict()
-
-        for field in self.fields:
-            data[field] = getattr(self, field)
-        # data['hashes'] = self.hashes.get_list()
-        return json.dumps(data, indent=4)
-    
-    
 class HashDB(object):
     """
         Abstract class representing HashDB, local or remote
@@ -106,7 +41,10 @@ class DirHashDB(HashDB):
         Local HashDB stored in directory
     """
 
-    def __init__(self, path=None):        
+    hpclass = HashPackage
+
+    def __init__(self, path=None):
+
         if path:
             self.path = path        
         else:
@@ -144,21 +82,39 @@ class DirHashDB(HashDB):
         else:
             raise ValueError('Wrong storage type "{}"'.format(value))
 
-    def read_config(self):
+    @property
+    def pkgtype(self):
+        return self.__config.get('pkgtype','generic')
 
-        self.__config = {'storage': 'basename'}
+    @pkgtype.setter
+    def pkgtype(self, value):
+        if value in ['generic', 'debsnap']:
+            self.__config['pkgtype'] = value
+        else:
+            raise ValueError('Wrong pkgtype "{}"'.format(value))
+
+
+
+    def read_config(self):
+        self.__config = {'storage': 'basename', 'pkgtype': 'generic'}
 
         try:
-            with open(os.path.join(self.path,'.options')) as f:
+            with open(os.path.join(self.path,'.options.json')) as f:
                 conf = json.load(f)
             for k,v in conf.items():
                 self.__config[k] = v
         except FileNotFoundError:
             pass
 
+
         # set default values
+        for hpc in self.hpclass.__subclasses__():
+            if hpc.pkgtype == self.__config['pkgtype']:
+                self.hpclass = hpc
 
-
+    def write_config(self):
+        with open(os.path.join(self.path,'.options.json'),'w') as f:
+            json.dump(self.__config, f, indent=4)
 
     def writehp(self, hp):
         """
@@ -173,6 +129,8 @@ class DirHashDB(HashDB):
         with open(path,"w") as f:
             f.write(hp.json())
 
+        hp.path = path
+
         return path
 
     def write(self):
@@ -185,15 +143,14 @@ class DirHashDB(HashDB):
         for root, dirs, files in os.walk(self.path, topdown=False):
             for basename in files:
                 path = os.path.join(root, basename)
-                if path != os.path.join(self.path, '.options'):
+                if path != os.path.join(self.path, '.options.json'):
                     os.unlink(path)
             for dirbasename in dirs:
                 path = os.path.join(root, dirbasename)
                 os.rmdir(path)
 
 
-        with open(os.path.join(self.path,'.options'),'w') as f:
-            json.dump(self.__config, f, indent=4)
+        self.write_config()
 
         for hp in self.packages:
             self.writehp(hp)
@@ -223,7 +180,7 @@ class DirHashDB(HashDB):
         """
         yields each full path to each package file in DirHashDB
         """
-        for root, dirs, files in os.walk(self.path):
+        for root, dirs, files in os.walk(os.path.join(self.path,'p')):
             for basename in files:
                 path = os.path.join(root, basename)
                 if path != os.path.join(self.path, '.options'):
@@ -244,7 +201,7 @@ class DirHashDB(HashDB):
 
         #for f in os.listdir( self.path ):
         for subpath in self.package_files():
-            hp = HashPackage().load(path = os.path.join(self.path, subpath))
+            hp = self.hpclass.load(path = os.path.join(self.path, subpath))
             self.submit(hp)
 
     def sig2url(self, sig):
@@ -254,6 +211,19 @@ class DirHashDB(HashDB):
                 phash = sigdict[sig]
                 return self.h2url[phash]
 
+        raise KeyError
+
+    def basename2hp(self, basename):
+        for hp in self.packages:
+            if hp.basename() == basename:
+                return hp
+        raise KeyError
+
+    def sig2hp(self, sig, sigtype=None):
+        for hp in self.packages:
+            for hpsigtype, hpsig in hp.signatures.items():
+                if (sigtype is None or sigtype == hpsigtype) and hpsig == sig:
+                    return hp
         raise KeyError
 
     def hash2url(self, hashspec):
@@ -286,7 +256,7 @@ class DirHashDB(HashDB):
         
 
     def __repr__(self):
-        return 'DirHashDB(path:{} stor:{} packages:{})'.format(self.path, self.storage, len(self.packages))
+        return 'DirHashDB(path:{} stor:{} pkgtype:{} packages:{})'.format(self.path, self.storage, self.__config['pkgtype'], len(self.packages))
 
     def dump(self):
         print("packages: {}".format(len(self.packages)))
@@ -327,6 +297,7 @@ class HashServer():
         self.config['submit'] = urllib.parse.urljoin(self.url,'submit')
         self.config['hashdb'] = urllib.parse.urljoin(self.url,'hashdb')
         self.config['motd'] = urllib.parse.urljoin(self.url,'motd.txt')
+        self.config['accept_url'] = list()
 
         r = requests.get(urllib.parse.urljoin(self.url,'config.json'))
         if r.status_code == 200:
@@ -362,7 +333,24 @@ class HashServer():
         hp = HashPackage.load(data = r.json())
         return(hp)
 
+    def want_accept(self, url):
+        log.debug("want_accept {}? {}".format(url, self.config))
+
+        for reurl in self.config['accept_url']:
+            if re.search(reurl, url):
+                log.info("want {}".format(url))
+                return True
+        return False
+
+
     def submit(self, url, file):
+        """
+        HashServer.submit()  to remote hashserver
+
+        :param url:
+        :param file:
+        :return:
+        """
         basename = os.path.basename(file)
 
         submitfile = File(file)
@@ -376,13 +364,14 @@ class HashServer():
         with open(file,'rb') as f:
             files['package'] = f
 
-            if not re.search("^https?://snapshots?.debian.org/archive/", url):
+            log.info("submit {}".format(file))
+
+            if not self.want_accept(url):
                 return
 
             hashspec = submitfile.hashes.get_hashspec()
 
             if self.fhash_exists(hashspec):
-                print("{} already indexed on {}".format(url, self))
                 return
 
             print("uploading {} ({}) to {}".format(basename, kmgt(submitfile.size),  self.config['submit']))
@@ -412,12 +401,20 @@ class HashDBClient(HashDB):
                 # usual user
                 self.path = os.path.expanduser("~/.hashget/hashdb")
 
+
         self.hashdb = dict()
 
         for name in os.listdir(self.path):
             project_path = os.path.join(self.path, name)
             if os.path.isdir(project_path):
+
                 self.hashdb[name] = DirHashDB(path = project_path)
+
+    def __repr__(self):
+        return("HashClient(l{} n{} q{} h{} m{})".format(
+            len(self.hashdb), len(self.hashserver),
+            self.stats['q'], self.stats['hits'], self.stats['miss']
+        ))
 
     def add_hashserver(self, url):
         hs = HashServer(url = url, )
@@ -425,24 +422,6 @@ class HashDBClient(HashDB):
         if not '_cached' in self.hashdb:
             self.create_project('_cached')
 
-    def sig2url(self, sig):
-        for hdb in self.hashdb.values():
-            try:
-                return hdb.sig2url(sig)
-            except KeyError:
-                pass
-
-        raise KeyError("Not found sig {} in any of hashdb: {}".format(sig, self.hashdb.keys()))
-
-    def hash2url(self, hspec):
-        for hdb in self.hashdb.values():
-            try:
-                return hdb.hash2url(hspec)
-            except KeyError:
-                pass
-
-        raise KeyError("Not found in any of {} hashdb".format(len(self.hashdb)))
-            
     def submit(self, hp, project, file=None):
         hdb = self.hashdb[project]
 
@@ -463,13 +442,6 @@ class HashDBClient(HashDB):
         p = self.hashdb[name]
         shutil.rmtree(p.path)
 
-    def sig_present(self, sigtype, signature):
-        if any(x[1].sig_present(sigtype, signature) for x in self.hashdb.items()):
-            # found in localdb
-            return True
-        if sigtype in ['deb']:
-            for hs in self.hashserver:
-                print("check {} in {}".format(signature, hs))
 
     """
         HashDBClient
@@ -482,7 +454,7 @@ class HashDBClient(HashDB):
     def __getitem__(self, item):
         return self.hashdb[item]
 
-    def get(self,name, default=None):
+    def get(self, name, default=None):
         """
 
         :param name: name of project
@@ -492,7 +464,7 @@ class HashDBClient(HashDB):
         return self.hashdb.get(name, default)
 
     """
-        common search methods
+        query methods
     """
     def fhash2phash(self, hashspec):
         for hdb in self.hashdb.values():
@@ -539,8 +511,52 @@ class HashDBClient(HashDB):
 
         raise KeyError
 
-    def __repr__(self):
-        return("HashClient(l{} n{} q{} h{} m{})".format(
-            len(self.hashdb), len(self.hashserver),
-            self.stats['q'], self.stats['hits'], self.stats['miss']
-        ))
+    def sig_present(self, sigtype, signature):
+        if any(x[1].sig_present(sigtype, signature) for x in self.hashdb.items()):
+            # found in localdb
+            return True
+        if sigtype in ['deb']:
+            for hs in self.hashserver:
+                print("check {} in {}".format(signature, hs))
+
+    def sig2hp(self, sig, sigtype=None):
+        """
+        get package by signature
+        :param sig:
+        :param sigtype:
+        :return:
+        """
+        for hdb in self.hashdb.values():
+            try:
+                return hdb.sig2hp(sig, sigtype)
+            except KeyError:
+                pass
+
+        raise KeyError("Not found sig {} in any of hashdb: {}".format(sig, self.hashdb.keys()))
+
+    def basename2hp(self, basename):
+        for hdb in self.hashdb.values():
+            try:
+                return hdb.basename2hp(basename)
+            except KeyError:
+                pass
+
+        raise KeyError("Not found sig {} in any of hashdb: {}".format(basename, list(self.hashdb.keys())))
+
+    def sig2url(self, sig):
+        for hdb in self.hashdb.values():
+            try:
+                return hdb.sig2url(sig)
+            except KeyError:
+                pass
+
+        raise KeyError("Not found sig {} in any of hashdb: {}".format(sig, self.hashdb.keys()))
+
+    def hash2url(self, hspec):
+        for hdb in self.hashdb.values():
+            try:
+                return hdb.hash2url(hspec)
+            except KeyError:
+                pass
+
+        raise KeyError("Not found in any of {} hashdb".format(len(self.hashdb)))

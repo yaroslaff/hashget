@@ -28,8 +28,11 @@ import datetime
 # from requests.adapters import HTTPAdapter
 
 import hashget
+import hashget.hashdb
+from hashget.submiturl import submit_url
+
 from hashget.utils import kmgt
-from hashget.debian import debcrawl_packages, deb2snapurl
+from hashget.debian import debcrawl_packages, debsubmit
 
 BUF_SIZE = 1024*1024
 
@@ -234,52 +237,6 @@ def postunpack(root, hashdb):
     # delete tmpdir
 
 
-def submit_url(url, project, anchors, filesz, file=None, signatures=None):
-
-    signatures = signatures or dict()
-
-    if file:
-        p = hashget.package.Package(path = file)
-    else:
-        p = hashget.package.Package(url = url)
-
-    p.download()
-    p.unpack()
-    p.read_files()
-    files = list()
-
-    signatures['url'] = url
-
-    indexed_size = 0
-
-    for f in p.files:
-        if filesz>=0 and f.size > filesz:
-            files.append(f.get_hashspec())
-            indexed_size += f.size
-
-        anchors.check_append(f)
-
-    p.cleanup()
-    
-    hp = hashget.HashPackage(
-            anchors = [ f.get_hashspec() for f in anchors.anchorlist ],
-            files = files,
-            url = url,
-            attrs = None,
-            hashes = p.hashes.get_list(),
-            signatures = signatures
-        )
-
-
-    hp.set_attr('size', p.package_size)
-    hp.set_attr('sum_size', p.sum_size)
-    hp.set_attr('indexed_size', indexed_size)
-    hp.set_attr('crawled_date', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-
-
-    hashdb.submit(hp, project=project, file=p.path)
-
-
 def get_by_sig(sig, outdir):
     try:
         url = hashdb.sig2url(sig)
@@ -359,7 +316,7 @@ def main():
 
     g = parser.add_argument_group('Other options')
     g.add_argument('--hashserver', nargs='*', default=def_hashserver, help='hashserver URL ({})'.format(def_hashserver))
-    g.add_argument('--hashdb', default=None, help='path to hashdb')
+    g.add_argument('--hashdb', default=None, help='path to local hashdb directory')
     g.add_argument('-X','--exclude-from', metavar='FILENAME', dest='excludefile', default=def_excludefile, help='Exclude file (for -X tar option) ({})'.format(def_excludefile))
     g.add_argument('--etag', default=False, action='store_true', help='verify HTTP E-Tag when reuse cached files')
     g.add_argument('--outdir', '-o', default=def_outdir, help='dir where to store --get files ({})'.format(def_outdir))
@@ -378,7 +335,7 @@ def main():
 
     args = parser.parse_args()
 
-    hashdb = hashget.HashDBClient(args.hashdb)
+    hashdb = hashget.hashdb.HashDBClient(args.hashdb)
     anchors = hashget.AnchorList(args.anchsz)
     for fa in args.fanchor:
         anchors.add_fanchor(fa)
@@ -398,15 +355,20 @@ def main():
 
     hashget.cacheget.opt_verify_etag = args.etag
 
+
+    log = logging.getLogger('hashget')
+    log.setLevel(loglevel)
     # logging.basicConfig(level = loglevel, format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    logging.basicConfig(level = loglevel, format='%(message)s')
-    log = logging.getLogger('slowget')
+    #log.basicConfig(level = loglevel, format='%(message)s')
+
+    logstdout = logging.StreamHandler()
+    logstdout.setFormatter(logging.Formatter('%(message)s', '%Y-%m-%d %H:%M:%S'))
+    log.addHandler(logstdout)
+
     if args.logfile:
         fh = logging.FileHandler(args.logfile)
-        fh.setFormatter(logging.Formatter(FORMAT, datefmt='%Y-%m-%d %H:%M:%S'))
+        fh.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
         log.addHandler(fh)
-
-
 
     """
     for e in os.environ:        
@@ -437,11 +399,11 @@ def main():
 
 
             if hashdb.sig_present('deb', p.signature):
-                print("already have {}".format(p.signature))
+                log.debug("already have {}".format(p.signature))
                 cnt_already += 1
                 continue
 
-            print("crawl {}".format(p.url))
+            log.info("crawl {}".format(p.url))
 
             signatures = {
                 'deb': p.signature
@@ -449,6 +411,7 @@ def main():
 
             submit_url(
                 url = p.url,
+                hashdb = hashdb,
                 project = 'debsnap',
                 anchors = anchors,
                 filesz = args.filesz,
@@ -493,7 +456,7 @@ def main():
             log.error('need --project when --submit')
             sys.exit(1)
 
-        submit_url(
+        hashget.submit_url(
             url = args.submit,
             file = args.file,
             project = args.project,
@@ -501,34 +464,7 @@ def main():
             filesz = args.filesz)
 
     if args.debsubmit:
-        url = deb2snapurl(args.debsubmit)
-        print("URL: {}".format(url))
-        assert(url.endswith('.deb'))
-
-        basename = url.split('/')[-1]
-        debsig = '.'.join(basename.split('.')[:-1])
-
-        if hashdb.sig_present('url', url):
-            print("URL sig {} already in hashdb".format(url))
-            return
-
-
-        if hashdb.sig_present('deb', debsig):
-            print("deb sig {} already in hashdb".format(debsig))
-            return
-
-
-        signatures = {
-            'deb': debsig
-        }
-
-        submit_url(
-            url = url,
-            file = args.debsubmit,
-            project = 'debsnap',
-            anchors = anchors,
-            filesz = args.filesz,
-            signatures = signatures)
+        debsubmit(hashdb, args.debsubmit, anchors)
 
 main()
 
