@@ -1,0 +1,17 @@
+#
+# edit and copy to /etc/systemd/system/hashget.service
+#
+# You need this ONLY if you operate HashDB repository
+#
+[Unit]
+Description=Update hashget HashDB from uploads
+After=network.target
+
+[Service]
+# User=www-data
+# Group=www-data
+WorkingDirectory=/tmp
+ExecStart=/usr/local/bin/hashget-admin --submitted /var/run/takeup/uploads/new/ /var/www/html/virtual/hashdb/hashdb/ --loop
+
+[Install]
+WantedBy=multi-user.target

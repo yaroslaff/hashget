@@ -11,6 +11,8 @@ import time
 import hashget
 from hashget import *
 
+import filelock
+
 from hashget.debian import debsubmit
 
 
@@ -54,6 +56,10 @@ def process_submitted(hashdb, newdir, webroot=None):
 
 
 
+# raise limit for logger filelock
+fllog = logging.getLogger('filelock')
+fllog.setLevel(logging.ERROR)
+
 
 def_submitted = ('/var/run/takeup/uploads/new','/var/www/html/virtual/hashdb/hashdb')
 
@@ -69,7 +75,7 @@ g.add_argument('--addproject', default=False, action='store_true', help='create 
 g.add_argument('--rmproject', default=False, action='store_true', help='delete -p project')
 g.add_argument('--modify', default=False, action='store_true', help='modify -p project')
 g.add_argument('--build', default=None, metavar='WEBROOT', help='build static web HashDB')
-g.add_argument('--submitted', nargs='?', default=None, const=def_submitted, metavar='UPLOADS_DIR, WEBROOT_DIR',
+g.add_argument('--submitted', nargs=2, default=def_submitted, metavar='UPLOADS_DIR, WEBROOT_DIR',
                help='process submitted packages ({})'.format(def_submitted))
 g.add_argument('--purge', nargs='+', default=None, metavar=('PkgBaseName','WebRoot'),
                help='purge package and links. (search/delete links if --full)')
@@ -86,7 +92,7 @@ g.add_argument('--storage', default=None, help='use this storage type for hashdb
 g.add_argument('--pkgtype', default=None, help='use this pkgtype for hashdb')
 
 g.add_argument('--verbose', '-v', default=False, action='store_true', help='verbose logging')
-g.add_argument('--loop', default=False, action='store_true', help='work in loop (for --submitted)')
+# g.add_argument('--loop', default=False, action='store_true', help='work in loop (for --submitted)')
 
 
 args = parser.parse_args()
@@ -155,12 +161,19 @@ if args.build:
 
 
 if args.submitted:
-    if args.loop:
-        while True:
-            process_submitted(hashdb, *args.submitted)
-            time.sleep(5)
+
+    if os.getuid():
+        lockfilename = os.path.expanduser("~/.hashget-admin.lock")
     else:
-        process_submitted(hashdb, *args.submitted)
+        lockfilename = '/var/run/hashget-admin.lock'
+
+    lock = filelock.FileLock(lockfilename)
+    try:
+        with lock.acquire(timeout=0):
+            process_submitted(hashdb, *args.submitted)
+    except filelock.Timeout:
+        log.warning("lockfile {} is already used".format(lockfilename))
+
 
 
 if args.purge:
