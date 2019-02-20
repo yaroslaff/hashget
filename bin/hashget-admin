@@ -63,6 +63,8 @@ fllog.setLevel(logging.ERROR)
 
 def_submitted = ('/var/run/takeup/uploads/new','/var/www/html/virtual/hashdb/hashdb')
 
+clean_targets = ['cacheget','hashdb','all']
+
 """
     Create arguments
 """
@@ -79,6 +81,9 @@ g.add_argument('--submitted', nargs=2, default=def_submitted, metavar='UPLOADS_D
                help='process submitted packages ({})'.format(def_submitted))
 g.add_argument('--purge', nargs='+', default=None, metavar=('PkgBaseName','WebRoot'),
                help='purge package and links. (search/delete links if --full)')
+g.add_argument('--clean', default=None, metavar='TARGET',
+               help='one of: {}'.format(clean_targets))
+
 
 
 g = parser.add_argument_group('Options')
@@ -188,3 +193,15 @@ if args.purge:
         print(e)
     else:
         p.purge(webroot=webroot, full=args.full)
+
+if args.clean:
+    if not args.clean in clean_targets:
+        log.error("clean target must be one of {}".format(clean_targets))
+        sys.exit(1)
+
+    if args.clean in ['cacheget','all']:
+        cg = hashget.cacheget.CacheGet()
+        cg.clean()
+
+    if args.clean in ['hashdb','all']:
+        hashdb.clean()

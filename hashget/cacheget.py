@@ -4,14 +4,17 @@ import tempfile
 import requests
 import time
 import logging
+import shutil
 
 from .utils import kmgt
 
 opt_verify_etag = True
 
+log = logging.getLogger('hashget')
+
 class CacheGet():
     
-    def __init__(self, cachedir = None, tmpdir = None, tmpprefix = None, log=None):
+    def __init__(self, cachedir = None, tmpdir = None, tmpprefix = None):
 
 
         if cachedir:
@@ -27,8 +30,8 @@ class CacheGet():
         
         self.tmpdir = tmpdir or '/tmp/'
         self.tmpprefix = tmpprefix or 'CacheGet-'
-        self.log = log or logging.getLogger('dummy')
-        
+        self.log = log
+
     def get(self, url, headers=None):
 
         headers = headers or dict()
@@ -128,4 +131,6 @@ class CacheGet():
         out['downloaded'] = os.stat(local_filename).st_size
         return out
             
-        
+    def clean(self):
+        log.warning('Clean {}'.format(self.cachedir))
+        shutil.rmtree(self.cachedir)

@@ -165,7 +165,7 @@ def prepare_readfiles(root, anchors, filesz, skipdirs):
             if os.path.islink(path) or not os.path.isfile(path):
                 continue
             
-            f = hashget.File(path, root=root)
+            f = hashget.file.File(path, root=root)
             if f.size > filesz:
                 files.append(f)
             anchors.check_append(f)
@@ -285,7 +285,7 @@ def main():
 
     def_anchsz = 100*1024
     def_filesz = 1024
-    def_hashserver = list(('http://hashdb.okerr.com/hashdb/',))
+    def_hashserver = list(('https://hashdb.okerr.com/hashdb/',))
     def_project = None
     def_excludefile = os.path.expanduser("~/hashget-exclude") 
     def_skipdirs = ['var/cache/','var/lib/apt/']

@@ -92,7 +92,7 @@ class Package(object):
             """ already downloaded """
             return self.path
      
-        cg = cacheget.CacheGet(log = self.loghandler)
+        cg = cacheget.CacheGet()
         r = cg.get(self.url)
         self.stat_cached += r['cached']
         self.stat_downloaded += r['downloaded']

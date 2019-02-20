@@ -6,11 +6,11 @@ def read(fname):
 
 setup(
     name='hashget',
-    version='0.9',
+    version='0.95',
     packages=['hashget'],
     scripts=['bin/hashget', 'bin/hashget-admin'],
 
-    install_requires=['filelock'],
+    install_requires=['patool','filetype','filelock'],
 
     url='https://gitlab.com/yaroslaff/hashget',
     license='MIT',

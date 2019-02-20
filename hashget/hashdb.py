@@ -294,6 +294,7 @@ class HashServer():
             self.url = self.url+'/'
 
         # default config
+        self.config['name'] = 'noname'
         self.config['submit'] = urllib.parse.urljoin(self.url,'submit')
         self.config['hashdb'] = urllib.parse.urljoin(self.url,'hashdb')
         self.config['motd'] = urllib.parse.urljoin(self.url,'motd.txt')
@@ -334,11 +335,8 @@ class HashServer():
         return(hp)
 
     def want_accept(self, url):
-        log.debug("want_accept {}? {}".format(url, self.config))
-
         for reurl in self.config['accept_url']:
             if re.search(reurl, url):
-                log.info("want {}".format(url))
                 return True
         return False
 
@@ -363,8 +361,6 @@ class HashServer():
         files = dict()
         with open(file,'rb') as f:
             files['package'] = f
-
-            log.info("submit {}".format(file))
 
             if not self.want_accept(url):
                 return
@@ -401,6 +397,10 @@ class HashDBClient(HashDB):
                 # usual user
                 self.path = os.path.expanduser("~/.hashget/hashdb")
 
+
+        if not os.path.isdir(self.path):
+            log.info('Created {} local hashdb'.format(self.path))
+            os.makedirs(self.path, exist_ok=True)
 
         self.hashdb = dict()
 
@@ -560,3 +560,7 @@ class HashDBClient(HashDB):
                 pass
 
         raise KeyError("Not found in any of {} hashdb".format(len(self.hashdb)))
+
+    def clean(self):
+        log.warning('Delete {}'.format(self.path))
+        shutil.rmtree(self.path)
