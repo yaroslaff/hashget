@@ -132,5 +132,6 @@ class CacheGet():
         return out
             
     def clean(self):
-        log.warning('Clean {}'.format(self.cachedir))
-        shutil.rmtree(self.cachedir)
+        if os.path.isdir(self.cachedir):
+            log.warning('Clean {}'.format(self.cachedir))
+            shutil.rmtree(self.cachedir)

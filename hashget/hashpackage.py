@@ -98,7 +98,7 @@ class HashPackage(object):
         log.debug("{} make anchors to {} in {}".format(self, self.path, webroot))
 
         for subpath in self.get_anchors():
-            print("sub {}".format(subpath))
+            # log.debug("sub {}".format(subpath))
             linkpath = os.path.join(webroot, subpath)
             os.makedirs(os.path.dirname(linkpath), exist_ok=True)
             if not os.path.islink(linkpath):

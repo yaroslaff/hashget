@@ -3,6 +3,12 @@
 Deduplication tool for archiving (backup) debian virtual machines
 
 
+## Installation
+
+~~~
+pip3 install hashget
+~~~
+
 ## commands
 
 ### Get file by hash

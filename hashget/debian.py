@@ -107,29 +107,28 @@ class DebPackage(object):
         return url
 
 
+def debsig2path(sig):
+    sigbase = sig.split('_')[0]
+    path = list()
+
+    if sigbase.startswith('lib'):
+        path.append('lib' + sigbase[3])
+    else:
+        path.append(sigbase[0])
+
+    path.append(sigbase)
+    path.append(sig)
+    return path
+
+
 class DebHashPackage(HashPackage):
 
     pkgtype = 'debsnap'
 
     def get_special_anchors(self):
-        def debsig2path(sig):
-            sigbase = sig.split('_')[0]
-            path = list()
-
-            if sigbase.startswith('lib'):
-                path.append('lib' + sigbase[3])
-            else:
-                path.append(sigbase[0])
-
-            path.append(sigbase)
-            path.append(sig)
-            return path
-
         for sigtype, sig in self.signatures.items():
             if sigtype == 'deb':
                 yield '/'.join(['sig', 'deb'] + debsig2path(sig))
-
-
 
 
 def load_release(filename):
@@ -243,17 +242,16 @@ def debsubmit(hashdb, path, anchors, attrs=None):
         'deb': debsig
     }
 
-    log.debug("submitting...")
     hp = submit_url(
         url = url,
         file = path,
         project = 'debsnap',
+        pkgtype = 'debsnap',
         anchors = anchors,
         # filesz=args.filesz,
         signatures = signatures,
         hashdb = hashdb,
         attrs = attrs,
-        hpclass = DebHashPackage)
-    log.debug("submitted... {}".format(hp))
+        )
 
     return hp

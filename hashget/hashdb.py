@@ -106,7 +106,6 @@ class DirHashDB(HashDB):
         except FileNotFoundError:
             pass
 
-
         # set default values
         for hpc in self.hpclass.__subclasses__():
             if hpc.pkgtype == self.__config['pkgtype']:
@@ -340,6 +339,17 @@ class HashServer():
                 return True
         return False
 
+    def sig_present(self, sigtype, signature):
+        if sigtype == 'deb':
+            path = ['sig','deb'] + debian.debsig2path(signature)
+            url = urllib.parse.urljoin(self.config['hashdb'], '/'.join(path))
+
+            r = requests.head(url)
+            if r.status_code == 200:
+                return True
+
+        return False
+
 
     def submit(self, url, file):
         """
@@ -437,6 +447,22 @@ class HashDBClient(HashDB):
         if not os.path.isdir(project_path):
             os.mkdir(project_path)
             self.hashdb[name] = DirHashDB(path=project_path)
+            return self.hashdb[name]
+
+    def ensure_project(self, name, pkgtype=None):
+        if name in self.hashdb:
+            # exists, not doing it
+            return self.hashdb[name]
+
+        log.debug('create project {} (pkgtype: {})'.format(name, pkgtype))
+        hdb = self.create_project(name)
+        if pkgtype is not None:
+            hdb.pkgtype = pkgtype
+            hdb.write_config()
+
+            # read config again, to update pkgtype
+            hdb.read_config()
+        return hdb
 
     def remove_project(self, name):
         p = self.hashdb[name]
@@ -517,7 +543,9 @@ class HashDBClient(HashDB):
             return True
         if sigtype in ['deb']:
             for hs in self.hashserver:
-                print("check {} in {}".format(signature, hs))
+                if hs.sig_present(sigtype, signature):
+                    return True
+        return False
 
     def sig2hp(self, sig, sigtype=None):
         """
@@ -562,5 +590,8 @@ class HashDBClient(HashDB):
         raise KeyError("Not found in any of {} hashdb".format(len(self.hashdb)))
 
     def clean(self):
-        log.warning('Delete {}'.format(self.path))
-        shutil.rmtree(self.path)
+        log.warning('Clean {}'.format(self.path))
+        for basename in os.listdir(self.path):
+            path = os.path.join(self.path, basename)
+            log.debug('Delete {}'.format(path))
+            shutil.rmtree(path)

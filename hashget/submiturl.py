@@ -1,9 +1,11 @@
 import datetime
-from .hashpackage import HashPackage
+# from .hashpackage import HashPackage
 from .package import Package
+import logging
 
+log = logging.getLogger('hashget')
 
-def submit_url(url, project, anchors, filesz=1024, hashdb=None, file=None, signatures=None, hpclass=None, attrs=None):
+def submit_url(url, project, anchors, filesz=1024, hashdb=None, file=None, signatures=None, pkgtype=None, attrs=None):
     """
     function interface
 
@@ -18,7 +20,9 @@ def submit_url(url, project, anchors, filesz=1024, hashdb=None, file=None, signa
     :return:
     """
 
-    hpclass = hashdb[project].hpclass
+    hdb = hashdb.ensure_project(project, pkgtype=pkgtype)
+
+    hpclass = hdb.hpclass
 
     signatures = signatures or dict()
     attrs = attrs or dict()
