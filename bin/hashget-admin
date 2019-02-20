@@ -98,6 +98,7 @@ g.add_argument('--full', default=False, action='store_true', help='for --purge')
 g.add_argument('--storage', default=None, help='use this storage type for hashdb')
 g.add_argument('--pkgtype', default=None, help='use this pkgtype for hashdb')
 
+g.add_argument('--logfile', default=None, help='log file name')
 g.add_argument('--verbose', '-v', default=False, action='store_true', help='verbose logging')
 # g.add_argument('--loop', default=False, action='store_true', help='work in loop (for --submitted)')
 
@@ -112,6 +113,11 @@ else:
     loglevel = logging.INFO
 
 logging.basicConfig(level = loglevel, format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+if args.logfile:
+    fh = logging.FileHandler(args.logfile)
+    fh.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+    log.addHandler(fh)
 
 hashdb = hashget.hashdb.HashDBClient(path=args.path)
 anchors = hashget.AnchorList()

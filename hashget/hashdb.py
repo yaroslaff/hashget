@@ -351,6 +351,20 @@ class HashServer():
         return False
 
 
+    def pull_sig(self, sigtype, signature):
+
+
+        if sigtype == 'deb':
+            path = ['sig','deb'] + debian.debsig2path(signature)
+            url = urllib.parse.urljoin(self.config['hashdb'], '/'.join(path))
+
+            r = requests.get(url)
+            if r.status_code == 200:
+                hp = HashPackage.load(data = r.json())
+                return(hp)
+        raise KeyError
+
+
     def submit(self, url, file):
         """
         HashServer.submit()  to remote hashserver
@@ -501,13 +515,41 @@ class HashDBClient(HashDB):
 
         raise KeyError
 
+    def pull_sig(self, sigtype, signature):
+        """
+        pull package by signature
+        :param sigtype:
+        :param signature:
+        :return:
+        """
+
+        for hs in self.hashserver:
+            self.stats['q'] += 1
+            try:
+                hp = hs.pull_sig(sigtype, signature)
+                # save
+                self.stats['hits'] += 1
+            except KeyError:
+                self.stats['miss'] += 1
+                return False
+            else:
+                self.submit(hp,'_cached')
+                return True
+
+        return False
+
+
+
+
     def pull_anchor(self, hashspec):
         """
 
-        pull package by anchor (should check if it exists locally before calling this)
+        pull package by anchor (checks if it exists locally before pulling)
+
+
 
         :param hashspec: hash of anchor (sha256:aabbcc...)
-        :return:
+        :return: None if already exists, True if pulled, False if missing on hashservers
         """
         try:
             self.fhash2phash(hashspec)
@@ -537,14 +579,15 @@ class HashDBClient(HashDB):
 
         raise KeyError
 
-    def sig_present(self, sigtype, signature):
+    def sig_present(self, sigtype, signature, remote=False):
         if any(x[1].sig_present(sigtype, signature) for x in self.hashdb.items()):
             # found in localdb
             return True
-        if sigtype in ['deb']:
-            for hs in self.hashserver:
-                if hs.sig_present(sigtype, signature):
-                    return True
+        if remote:
+            if sigtype in ['deb']:
+                for hs in self.hashserver:
+                    if hs.sig_present(sigtype, signature):
+                        return True
         return False
 
     def sig2hp(self, sig, sigtype=None):

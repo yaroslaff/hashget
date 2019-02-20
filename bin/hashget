@@ -33,6 +33,7 @@ from hashget.submiturl import submit_url
 
 from hashget.utils import kmgt
 from hashget.debian import debcrawl_packages, debsubmit
+from hashget.restorefile import restorefile
 
 BUF_SIZE = 1024*1024
 
@@ -113,7 +114,7 @@ def prepare(root, hashdb, anchors, filesz, skipdirs, excludefile):
         hashdb.pull_anchor(a.get_hashspec())
 
     ph = dict() # package hashes to URLs
-    rfile = hashget.restorefile.restorefile()
+    rfile = restorefile()
 
     with open(excludefile,'w') as excf:
         for f in files:
@@ -136,7 +137,7 @@ def prepare(root, hashdb, anchors, filesz, skipdirs, excludefile):
             rfile.add_package(url = purl, hashspec = ph)
         
         rfile.save(os.path.join(root,'.hashget-restore'))
-    print("saved: {}".format(rfile))
+    log.info("saved: {}".format(rfile))
 
     # guess_packages(root, files)
 
@@ -397,11 +398,15 @@ def main():
 
             cnt_total += 1
 
-
-            if hashdb.sig_present('deb', p.signature):
-                log.debug("already have {}".format(p.signature))
-                cnt_already += 1
+            if hashdb.sig_present('deb', p.signature, remote=False):
+                log.debug('local {}'.format(p.signature))
                 continue
+
+
+            if hashdb.pull_sig('deb', p.signature):
+                log.info('pulled {}'.format(p.signature))
+                continue
+
 
             log.info("crawl {}".format(p.url))
 
