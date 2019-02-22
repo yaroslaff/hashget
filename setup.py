@@ -6,7 +6,7 @@ def read(fname):
 
 setup(
     name='hashget',
-    version='0.100',
+    version='0.103',
     packages=['hashget'],
     scripts=['bin/hashget', 'bin/hashget-admin'],
 

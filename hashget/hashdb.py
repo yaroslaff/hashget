@@ -354,6 +354,8 @@ class HashServer():
     def pull_sig(self, sigtype, signature):
 
 
+        log.debug('hashserver {} pull sig {}:{}'.format(self, sigtype, signature))
+
         if sigtype == 'deb':
             path = ['sig','deb'] + debian.debsig2path(signature)
             url = urllib.parse.urljoin(self.config['hashdb'], '/'.join(path))
@@ -362,6 +364,8 @@ class HashServer():
             if r.status_code == 200:
                 hp = HashPackage.load(data = r.json())
                 return(hp)
+            else:
+                log.debug("status: {} {}".format(r.status_code, url))
         raise KeyError
 
 
@@ -562,6 +566,7 @@ class HashDBClient(HashDB):
             try:
                 hp = hs.fhash2package(hashspec)
                 # save
+                log.debug('pulled {} by anchor'.format(hp))
                 self.stats['hits'] += 1
             except KeyError:
                 self.stats['miss'] += 1

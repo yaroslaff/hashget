@@ -22,37 +22,45 @@ def process_submitted(hashdb, newdir, webroot=None):
 
     for name in os.listdir(newdir):
         """ for each upload dir """
-        dir = os.path.join(newdir, name)
+        updir = os.path.join(newdir, name)
+
+        log.debug('process dir {}'.format(updir))
+
+        metafile = os.path.join(updir,'_meta.json')
+
         try:
-            with open(os.path.join(dir,'_meta.json')) as f:
+            with open(metafile) as f:
                 meta = json.load(f)
+        except FileNotFoundError as e:
+            log.warning('no metafile {}'.format(metafile))
+            shutil.rmtree(updir)
+            return
 
+        pkgbasename = meta['files']['package']
+        debsig = pkgbasename[:-4] # strip .deb
 
+        if not hashdb.sig_present('deb',debsig):
+            for basename in os.listdir(updir):
+                path = os.path.join(updir, basename)
+                if path.endswith('.deb'):
+                    log.debug('processing package {}'.format(basename))
+                    attrs = dict()
+                    attrs['uploaded_ip'] = meta['ip']
+                    attrs['uploaded_time'] = meta['time']
 
-            pkgbasename = meta['files']['package']
-            debsig = pkgbasename[:-4] # strip .deb
+                    try:
+                        hp = debsubmit(hashdb, path, anchors, attrs=attrs)
+                        log.debug('submitted {}'.format(hp))
+                    except ValueError as e:
+                        log.info(str(e))
+                    else:
+                        if webroot:
+                            hp.make_anchors(webroot)
+                        log.info('Submitted {} from {}'.format(hp, meta['ip']))
+        else:
+            log.debug('already have debsig {}'.format(debsig))
 
-            if not hashdb.sig_present('deb',debsig):
-                for basename in os.listdir(dir):
-                    path = os.path.join(dir, basename)
-                    if path.endswith('.deb'):
-                        attrs = dict()
-                        attrs['uploaded_ip'] = meta['ip']
-                        attrs['uploaded_time'] = meta['time']
-
-                        try:
-                            hp = debsubmit(hashdb, path, anchors, attrs=attrs)
-                        except ValueError as e:
-                            log.info(str(e))
-                        else:
-
-                            if webroot:
-                                hp.make_anchors(webroot)
-                            log.info('Submitted {} from {}'.format(hp, meta['ip']))
-        except (KeyError, FileNotFoundError):
-            pass
-
-        shutil.rmtree(dir)
+        shutil.rmtree(updir)
 
 
 

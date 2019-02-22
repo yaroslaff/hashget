@@ -32,7 +32,7 @@ import hashget.hashdb
 from hashget.submiturl import submit_url
 
 from hashget.utils import kmgt
-from hashget.debian import debcrawl_packages, debsubmit
+from hashget.debian import DebStatus, debsubmit
 from hashget.restorefile import restorefile
 
 BUF_SIZE = 1024*1024
@@ -394,21 +394,28 @@ def main():
         # ensure debsnap project exists
         hashdb.create_project('debsnap')
 
-        for p in debcrawl_packages(args.debcrawl):
+        debstatus = DebStatus(args.debcrawl)
+        np = debstatus.n_installed
+        print("Total: {} packages".format(np))
+
+        for p in debstatus.packages_iter():
 
             cnt_total += 1
 
             if hashdb.sig_present('deb', p.signature, remote=False):
-                log.debug('local {}'.format(p.signature))
+                log.debug('[{}/{}] local {}'.format(cnt_total, np, p.signature))
                 continue
-
 
             if hashdb.pull_sig('deb', p.signature):
-                log.info('pulled {}'.format(p.signature))
+                log.info('[{}/{}] pulled {} from hashserver'.format(cnt_total, np, p.signature))
                 continue
 
+            url = p.url
+            if url is None:
+                log.warning('[{}/{}] FAILED to crawl {}'.format(cnt_total, np, p.signature))
+                continue
 
-            log.info("crawl {}".format(p.url))
+            log.info("[{}/{}] crawl {}".format(cnt_total, np, p.url))
 
             signatures = {
                 'deb': p.signature

@@ -13,6 +13,7 @@ from .cacheget import CacheGet
 
 from .submiturl import submit_url
 from .hashpackage import HashPackage
+from .exceptions import HashPackageExists
 
 rsess = None
 
@@ -56,7 +57,7 @@ class DebPackage(object):
             return self.__url
 
         self.__url = self.get_snapshot_url()
-        return self.url
+        return self.__url
 
     def get_snapshot_url(self):
         prefix = 'http://snapshot.debian.org/mr/'
@@ -81,6 +82,10 @@ class DebPackage(object):
         url = prefix + 'binary/' + self.package + '/' + self.version + '/binfiles'
 
         r = self.rsess.get(url)
+
+        if r.status_code != 200:
+            print("{}: {}".format(r.status_code, url))
+            return None
 
         data = json.loads(r.text)
         
@@ -130,73 +135,88 @@ class DebHashPackage(HashPackage):
             if sigtype == 'deb':
                 yield '/'.join(['sig', 'deb'] + debsig2path(sig))
 
+class DebStatus():
 
-def load_release(filename):
-    """
-        load Release file as data structure
-    """
-    data = dict()
-    datalist = list()
-    lastkey = None    
-    
-    array = False
-    
-    with open(filename, encoding='utf-8') as f:
-        for line in f:
-            if line == '\n':
-                # list element
-                array = True
-                datalist.append(data)
-                data = dict()                    
-            elif line[0] == ' ':
-                # starts with space
-                if data[lastkey] == '':
-                    data[lastkey] = list()
-                else:
-                    if isinstance(data[lastkey], list):
-                        data[lastkey].append(line.strip())
+
+    def __init__(self, statusfile):
+        if os.path.isdir(statusfile):
+            self.statusfile = os.path.join(statusfile,'var/lib/dpkg/status')
+        else:
+            self.statusfile = statusfile
+
+        self.packages = self.load_release()
+        self.__installed = None
+
+
+    @property
+    def n_total(self):
+        return len(self.packages)
+
+    @property
+    def n_installed(self):
+        if self.__installed is not None:
+            return self.__installed
+
+        self.__installed = 0
+        for pdict in self.packages:
+            p = DebPackage(info=pdict)
+            if p.is_installed():
+                self.__installed += 1
+
+        return self.__installed
+
+
+    def packages_iter(self):
+
+        for pdict in self.packages:
+            p = DebPackage(info=pdict)
+            if not p.is_installed():
+                continue
+            yield (p)
+
+    def load_release(self):
+        """
+            load Release file as data structure
+        """
+        data = dict()
+        datalist = list()
+        lastkey = None
+
+        array = False
+
+        with open(self.statusfile, encoding='utf-8') as f:
+            for line in f:
+                if line == '\n':
+                    # list element
+                    array = True
+                    datalist.append(data)
+                    data = dict()
+                elif line[0] == ' ':
+                    # starts with space
+                    if data[lastkey] == '':
+                        data[lastkey] = list()
                     else:
-                        # string continues on new line
-                        data[lastkey] += line.strip()
-            else:
-                # usual key: value
-                k, v = line.rstrip().split(':',1)
-                data[k] = v.strip()
-                lastkey = k
+                        if isinstance(data[lastkey], list):
+                            data[lastkey].append(line.strip())
+                        else:
+                            # string continues on new line
+                            data[lastkey] += line.strip()
+                else:
+                    # usual key: value
+                    k, v = line.rstrip().split(':',1)
+                    data[k] = v.strip()
+                    lastkey = k
 
-    # end of file
-    if array:
-        return datalist
-    
-    return data
+        # end of file
+        if array:
+            return datalist
+
+        return data
 
 
 #
 # Crawling
 #
-
-
-def debcrawl_packages(root):
-    cnt_total = 0
-    cnt_installed = 0
-    cnt_not_installed = 0
-    cnt_already = 0
-    cnt_new = 0
-
-    def file2pkgname(filename):
-        # delete suffix (.list) or :arch.list
-        if ':' in filename:
-            return filename.split(':')[0]
-        else:
-            return '.'.join(filename.split('.')[:-1])
-
-    status = load_release(os.path.join(root, 'var/lib/dpkg/status'))
-
-    for pdict in status:
-        p = DebPackage(info=pdict)
-        if not p.is_installed():
-           continue
-        yield(p)
 
 def deb2snapurl(path):
     """
@@ -212,12 +232,17 @@ def deb2snapurl(path):
 
     data = r.json()
 
-    for r in data['result']:
+    if 'result' in data:
+        rfield = 'result'
+    else:
+        rfield = 'results'
+
+    for r in data[rfield]:
         if r['archive_name'] == 'debian':
             url = 'http://snapshot.debian.org/archive/{archive_name}/{first_seen}{path}/{name}'.format(**r)
             return url
 
-    r=data['results'][0]
+    r=data[rfield][0]
     url = '/'.join(['http://snapshot.debian.org/archive', r['archive_name'], r['first_seen'], r['path'], r['name']])
     return url
 
@@ -233,10 +258,10 @@ def debsubmit(hashdb, path, anchors, attrs=None):
     debsig = '.'.join(basename.split('.')[:-1])
 
     if hashdb.sig_present('url', url):
-        raise ValueError("HashDB has URL sig {}".format(url))
+        raise HashPackageExists("HashDB has URL sig {}".format(url))
 
     if hashdb.sig_present('deb', debsig):
-        raise ValueError("HashDB has deb sig {}".format(debsig))
+        raise HashPackageExists("HashDB has deb sig {}".format(debsig))
 
     signatures = {
         'deb': debsig
