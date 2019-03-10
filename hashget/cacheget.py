@@ -12,10 +12,11 @@ opt_verify_etag = True
 
 log = logging.getLogger('hashget')
 
+user_agent = 'CacheGet/0.1'
+
 class CacheGet():
     
     def __init__(self, cachedir = None, tmpdir = None, tmpprefix = None):
-
 
         if cachedir:
             self.cachedir = cachedir
@@ -83,6 +84,7 @@ class CacheGet():
         self.log.debug('downloading {} to {}'.format(url, local_filename))
         # NOTE the stream=True parameter
 
+        headers['User-Agent'] = user_agent
 
         r = None
         while r is None:

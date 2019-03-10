@@ -37,5 +37,8 @@ class AnchorList(object):
         if self.is_anchor(f):
             self.anchorlist.append(f)
 
+    def clean_list(self):
+        self.anchorlist = list()
+
     def __repr__(self):
         return 'AnchorList(minsz: {} {} re, {} anchors)'.format(self.minsz, len(self.re_list), len(self.anchorlist))

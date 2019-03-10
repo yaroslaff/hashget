@@ -14,7 +14,8 @@ from hashget import *
 import filelock
 
 from hashget.debian import debsubmit
-
+from hashget.exceptions import HashPackageExists
+from hashget.utils import kmgt
 
 def process_submitted(hashdb, newdir, webroot=None):
 
@@ -43,6 +44,9 @@ def process_submitted(hashdb, newdir, webroot=None):
             for basename in os.listdir(updir):
                 path = os.path.join(updir, basename)
                 if path.endswith('.deb'):
+
+                    anchors.clean_list()
+
                     log.debug('processing package {}'.format(basename))
                     attrs = dict()
                     attrs['uploaded_ip'] = meta['ip']
@@ -51,8 +55,8 @@ def process_submitted(hashdb, newdir, webroot=None):
                     try:
                         hp = debsubmit(hashdb, path, anchors, attrs=attrs)
                         log.debug('submitted {}'.format(hp))
-                    except ValueError as e:
-                        log.info(str(e))
+                    except HashPackageExists as e:
+                        log.debug("Exists: {}".format(str(e)))
                     else:
                         if webroot:
                             hp.make_anchors(webroot)
@@ -63,15 +67,102 @@ def process_submitted(hashdb, newdir, webroot=None):
         shutil.rmtree(updir)
 
 
+def do_dump(hashdb, basename, project=None):
+    try:
+        p = hashdb.basename2hp(basename, project, remote=True)
+        print(p.json())
+    except KeyError as e:
+        log.error(e)
 
+def do_list(hashdb, project=None):
+    for name, hdb in hashdb.hashdb.items():
+        if name == project or project is None:
+            for hp in hdb.packages_iter():
+                print(hp)
 
+def do_status(hashdb, project=None, webroot=None):
+
+    def dir_size(start_path='.'):
+        total_size = 0
+        for dirpath, dirnames, filenames in os.walk(start_path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                total_size += os.path.getsize(fp)
+        return total_size
+
+    for name, hdb in hashdb.items():
+        if name == project or project is None:
+            print(name, hdb)
+            print("  size: {}".format(kmgt(dir_size(hdb.path))))
+
+            last_crawled = None
+            first_crawled = None
+            total_size = 0
+            total_sum_size = 0
+            total_indexed_size = 0
+            total_packages = 0
+            total_anchors = 0
+            total_files = 0
+            total_noanchor = 0
+            total_noanchor_sum_size = 0
+            total_noalink = 0
+            total_otheralink = 0
+
+            for hp in hdb.packages_iter():
+                total_packages += 1
+
+                if last_crawled is None or hp.attrs['crawled_date'] > last_crawled:
+                    last_crawled = hp.attrs['crawled_date']
+
+                if first_crawled is None or hp.attrs['crawled_date'] < first_crawled:
+                    first_crawled = hp.attrs['crawled_date']
+
+                total_size += hp.attrs['size']
+                total_sum_size += hp.attrs['sum_size']
+                total_indexed_size += hp.attrs['indexed_size']
+                total_anchors += len(hp.anchors)
+                total_files += len(hp.files)
+
+                if len(hp.anchors) == 0:
+                    total_noanchor += 1
+                    total_noanchor_sum_size += hp.attrs['sum_size']
+
+                if webroot:
+                    for hspec, a in hp.get_anchors():
+                        apath = os.path.join(webroot, a)
+                        if not os.path.islink(apath):
+                            log.debug("NO LINK {} to {}".format(apath, hp.path))
+                            total_noalink += 1
+                        else:
+                            if os.readlink(apath) != hp.path:
+                                log.debug("OTHER LINK {} > {} (not {})".format(hspec, os.path.basename(os.readlink(apath)), hp))
+                                total_otheralink += 1
+
+            print("  packages: {}\n"
+            "  first crawled: {}\n"
+            "  last_crawled: {}\n"
+            "  files: {}\n"
+            "  anchors: {}\n"
+            "  packages size: {}\n"
+            "  files size: {}\n"
+            "  indexed size: {} ({:.2f}%)\n"
+            "  noanchor packages: {}\n"
+            "  noanchor size: {}\n"
+            "  no anchor link: {}\n"
+            "  bad anchor link: {}\n"
+            .format(total_packages, first_crawled, last_crawled, total_files, total_anchors,
+                    kmgt(total_size), kmgt(total_sum_size), kmgt(total_indexed_size),
+                    total_indexed_size*100/total_sum_size if total_sum_size else 0,
+                    total_noanchor, total_noanchor_sum_size,
+                    total_noalink, total_otheralink))
 
 # raise limit for logger filelock
 fllog = logging.getLogger('filelock')
 fllog.setLevel(logging.ERROR)
 
 
-def_submitted = ('/var/run/takeup/uploads/new','/var/www/html/virtual/hashdb/hashdb')
+def_submitted = ('/var/run/takeup/uploads/new')
+def_webroot = os.getenv('HASHGET_WEBROOT', None)
 
 clean_targets = ['cacheget','hashdb','all']
 
@@ -80,14 +171,18 @@ clean_targets = ['cacheget','hashdb','all']
 """
 parser = argparse.ArgumentParser(description='HashGet fetcher and deduplicator')
 
+g = parser.add_argument_group('Information')
+g.add_argument('--status', default=False, action='store_true', help='status for --project (or all projects)')
+g.add_argument('--list', default=False, action='store_true', help='list all contents of --project (or all)')
+g.add_argument('--dump', default=None, metavar='BASENAME', help='dump one package by basename (can use with --project)')
+
+
 g = parser.add_argument_group('Commands')
-g.add_argument('--status', default=None, action='store_true', help='status for --project or all projects')
-g.add_argument('--list', default=False, action='store_true', help='briefly list all projects')
 g.add_argument('--addproject', default=False, action='store_true', help='create -p project')
 g.add_argument('--rmproject', default=False, action='store_true', help='delete -p project')
 g.add_argument('--modify', default=False, action='store_true', help='modify -p project')
 g.add_argument('--build', default=None, metavar='WEBROOT', help='build static web HashDB')
-g.add_argument('--submitted', nargs=2, default=None, metavar='UPLOADS_DIR, WEBROOT_DIR',
+g.add_argument('--submitted', default=None, metavar='UPLOADS_DIR',
                help='process submitted packages ({})'.format(def_submitted))
 g.add_argument('--purge', nargs='+', default=None, metavar=('PkgBaseName','WebRoot'),
                help='purge package and links. (search/delete links if --full)')
@@ -99,6 +194,8 @@ g.add_argument('--clean', default=None, metavar='TARGET',
 g = parser.add_argument_group('Options')
 g.add_argument('--project','-p', default=None, metavar='NAME', help='Project name')
 g.add_argument('--path', default=None, help='Path to local HashDB directories')
+g.add_argument('--webroot', default=def_webroot, help='path to web root (def: $HASHGET_WEBROOT={})'.format(def_webroot))
+
 # g.add_argument('--project', default=None, help='Project name')
 g.add_argument('--really', default=False, action='store_true', help='additonal flag for dangerous operations')
 g.add_argument('--full', default=False, action='store_true', help='for --purge')
@@ -127,18 +224,19 @@ if args.logfile:
     fh.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
     log.addHandler(fh)
 
-hashdb = hashget.hashdb.HashDBClient(path=args.path)
+hashdb = hashget.hashdb.HashDBClient(path=args.path, load=False)
+
 anchors = hashget.AnchorList()
 
 if args.list:
-    for name, hdb in hashdb.items():
-        print(name, hdb)
+    do_list(hashdb, args.project)
 
 if args.status:
-    for name, hdb in hashdb.hashdb.items():
-        if name == args.project or not args.project:
-            print(name, hdb)
-            hdb.dump()
+    do_status(hashdb, args.project, args.webroot)
+
+if args.dump:
+    do_dump(hashdb, args.dump, args.project)
+
 
 if args.addproject:
     print("create project {}".format(args.project))
@@ -191,7 +289,7 @@ if args.submitted:
     lock = filelock.FileLock(lockfilename)
     try:
         with lock.acquire(timeout=0):
-            process_submitted(hashdb, *args.submitted)
+            process_submitted(hashdb, args.submitted, args.webroot)
     except filelock.Timeout:
         log.warning("lockfile {} is already used".format(lockfilename))
 

@@ -45,7 +45,13 @@ class DebPackage(object):
 
     @property
     def signature(self):
-        return "{}_{}_{}".format(self.package, self.version, self.arch)
+
+        if ':' in self.version:
+            version_noepoch = self.version.split(':')[1]
+        else:
+            version_noepoch = self.version
+
+        return "{}_{}_{}".format(self.package, version_noepoch, self.arch)
     
     def __repr__(self):
         return self.signature
@@ -89,7 +95,6 @@ class DebPackage(object):
 
         data = json.loads(r.text)
         
-        # print json.dumps(data, indent=4)
         for r in data['result']:
             if r['architecture'] == self.arch:
                 hashsum = r['hash']
@@ -98,9 +103,6 @@ class DebPackage(object):
         r = self.rsess.get(url)
         data = json.loads(r.text)
         result = data['result'][0]
-        
-        # print json.dumps(data, indent=4)
-        
 
         arcname = result['archive_name']
         first_seen = result['first_seen']     
@@ -133,10 +135,9 @@ class DebHashPackage(HashPackage):
     def get_special_anchors(self):
         for sigtype, sig in self.signatures.items():
             if sigtype == 'deb':
-                yield '/'.join(['sig', 'deb'] + debsig2path(sig))
+                yield (':'.join([sigtype, sig]), '/'.join(['sig', 'deb'] + debsig2path(sig)))
 
 class DebStatus():
-
 
     def __init__(self, statusfile):
         if os.path.isdir(statusfile):

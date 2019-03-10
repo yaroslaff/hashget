@@ -85,19 +85,19 @@ class HashPackage(object):
         return list()
 
     def get_anchors(self):
-        for subpath in self.get_special_anchors():
-            yield subpath
+        for a, subpath in self.get_special_anchors():
+            yield (a, subpath)
 
         for a in self.hashes + self.anchors:
             spec, hsum = a.split(':', 1)
             if spec != 'sha256':
                 continue
-            yield '/'.join(['a', hsum[0:2], hsum[2:4], hsum[4:6], hsum[6:]])
+            yield ( a, '/'.join(['a', hsum[0:2], hsum[2:4], hsum[4:6], hsum[6:]]))
 
     def make_anchors(self, webroot):
         log.debug("{} make anchors to {} in {}".format(self, self.path, webroot))
 
-        for subpath in self.get_anchors():
+        for hspec, subpath in self.get_anchors():
             # log.debug("sub {}".format(subpath))
             linkpath = os.path.join(webroot, subpath)
             os.makedirs(os.path.dirname(linkpath), exist_ok=True)

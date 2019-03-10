@@ -64,6 +64,6 @@ def submit_url(url, project, anchors, filesz=1024, hashdb=None, file=None, signa
     hp.set_attr('indexed_size', indexed_size)
     hp.set_attr('crawled_date', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
-    hashdb.submit(hp, project=project, file=p.path)
+    hashdb.submit_save(hp, project=project, file=p.path)
     return hp
 

@@ -3,7 +3,8 @@ import os
 from .file import File
 from . import utils
 
-class restorefile(object):
+
+class RestoreFile(object):
     
     def __init__(self, path=None):
         self.path = path
@@ -29,9 +30,8 @@ class restorefile(object):
         for fdata in self.data['files']:
             if fdata[spec] == hsum:
                 f = File.from_dict(fdata, self.root)
-                return f
-        raise LookupError('No file with hash {}'.format(hashspec))
-            
+                yield f
+
     def packages(self):
         for pdata in self.data['packages']:
             yield pdata['url']
