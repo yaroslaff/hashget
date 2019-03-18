@@ -26,7 +26,7 @@ setup(
     packages=['hashget'],
     scripts=['bin/hashget', 'bin/hashget-admin'],
 
-    install_requires=['patool','filetype','filelock'],
+    install_requires=['patool','filetype','filelock','setuptools'],
 
     url='https://gitlab.com/yaroslaff/hashget',
     license='MIT',

@@ -1,0 +1,24 @@
+#!/usr/bin/python3
+
+import argparse
+import hashget.file
+import os
+
+parser = argparse.ArgumentParser(
+    description='HashGet ver {} deduplication and compression tool'.format(hashget.__version__))
+
+parser.add_argument('--readfiles', default=None, metavar='DIR', help='prepare DIR for hash-tarring')
+
+args = parser.parse_args()
+
+if args.readfiles:
+    filelist = list()
+    sum_size = 0
+    for path in hashget.utils.dircontent(args.readfiles):
+        print(path)
+        if os.path.isfile(path) and not os.path.islink(path):
+            f = hashget.file.File(path, root=args.readfiles)
+            filelist.append(f)
+            sum_size += f.size
+
+    print("{} files, {} size".format(len(filelist), hashget.utils.kmgt(sum_size)))

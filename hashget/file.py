@@ -78,9 +78,11 @@ class File():
         stat = os.stat(self.filename)
 
         self.size = stat.st_size        
-        self.user = pwd.getpwuid(stat.st_uid).pw_name
+        # self.user = pwd.getpwuid(stat.st_uid).pw_name
+        self.user = None
         self.uid = stat.st_uid
-        self.group = grp.getgrgid(stat.st_gid)[0]
+        # self.group = grp.getgrgid(stat.st_gid)[0]
+        self.group = None
         self.gid = stat.st_gid
 
         self.atime = int(stat.st_atime)
@@ -120,12 +122,14 @@ class File():
         
         return f
     
-    def recover(self, path):        
+    def recover(self, path, usermode=False):
         shutil.copyfile(path, self.filename)
         os.chmod(self.filename, self.mode)
-        os.chown(self.filename, self.uid, self.gid)
         os.utime(self.filename, (self.atime, self.mtime))
-        
+
+        if not usermode:
+            os.chown(self.filename, self.uid, self.gid)
+
 class FileList(list):
     
     def getbymd5(self, digest):

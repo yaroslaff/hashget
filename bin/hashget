@@ -7,6 +7,11 @@
 # 
 # heuristics?
 #
+# rehash local files (if found xxx.tar.gz, hash it, store inside archive)
+# add .hashget-restore files to archive (not store it in root of archive)
+# use rhash for faster
+#
+#
 
 import argparse
 import os
@@ -155,7 +160,7 @@ def prepare_readfiles(root, anchors, filesz, skipdirs):
 #
 # PostUnpack
 #
-def postunpack(root, hashdb):
+def postunpack(root, hashdb, usermode=False):
     """
         Restore files after untarring
     """
@@ -187,7 +192,7 @@ def postunpack(root, hashdb):
 
             for rf in rfile.fbyhash(hashspec):
                 print('recovered ' + rf.filename)
-                rf.recover(pf.filename)
+                rf.recover(pf.filename, usermode=usermode)
                 stat_recovered += rf.size
                 stat_files += 1
                 
@@ -292,6 +297,7 @@ def main():
     g.add_argument('--etag', default=False, action='store_true', help='verify HTTP E-Tag when reuse cached files')
     g.add_argument('--outdir', '-o', default=def_outdir, help='dir where to store --get files ({})'.format(def_outdir))
     g.add_argument('--file', '-f', default=None, help='filename (if already downloaded)')
+    g.add_argument('--user', default=False, action='store_true', help='user mode (for --postunpack). do not set owner for files')
 
 
     g = parser.add_argument_group('Target system specification')
@@ -419,7 +425,7 @@ def main():
             )
 
     if args.postunpack:
-        postunpack(args.postunpack, hashdb = hashdb)
+        postunpack(args.postunpack, hashdb = hashdb, usermode=args.user)
 
     if args.get:
         if args.get.startswith('sha256:'):
