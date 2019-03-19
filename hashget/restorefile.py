@@ -52,15 +52,33 @@ class RestoreFile(object):
     def load(self, path):
         with open(path) as f:
             self.data = json.load(f)
-    
-    def set_processed(self, hashspec):
+
+
+    def should_process(self, hashspec):
         spec, hsum = hashspec.split(':')
 
         for fdata in self.data['files']:
             if fdata[spec] == hsum:
+                return not fdata['processed']
+        return False
+
+    def set_processed(self, hashspec):
+        """
+        sets processed flag
+
+        :param hashspec:
+        :return: old value of processed flag. or None if no such file
+        """
+        spec, hsum = hashspec.split(':')
+
+        old_state = None
+
+        for fdata in self.data['files']:
+            if fdata[spec] == hsum:
+                old_state = fdata['processed']
                 fdata['processed'] = True
-        
-    
+        return old_state
+
     def preiteration(self):
         for fdata in self.data['files']:
             fdata['processed'] = False     
@@ -77,8 +95,10 @@ class RestoreFile(object):
                 len(self.data['packages']),
                 utils.kmgt(self.sumsize()))
 
+    def get_nfiles(self):
+        return len(self.data['files'])
+
     def check_processed(self):
-        print("check processed")
         np = 0
         nnp =0
 
@@ -86,6 +106,7 @@ class RestoreFile(object):
             if fdata['processed']:
                 np += 1
             else:
-                print("NO PROCESSED {}".format(fdata))
+                print("NOT PROCESSED {} {}".format(fdata['sha256'], fdata['file']))
                 nnp += 1
-        print("processed: {} files, not processed {} files".format(np, nnp))
+        if nnp > 0:
+            print("processed: {}/{} files, missing {} files. Try --recursive option".format(np, len(self.data['files']), nnp))

@@ -2,8 +2,8 @@
 
 #
 # TODO: 
-# forced anchors (done?) and selfhash anchors
-# do not download selfhash file if it's in hashdb or in prepacking dir
+# forced anchors (done?) and self-hash anchors
+# do not download self-hash file if it's in hashdb or in pre-packing dir
 # 
 # heuristics?
 #
@@ -21,7 +21,6 @@ import sys
 import time
 import logging
 import shutil
-import datetime
 
 # from requests.packages.urllib3.util.retry import Retry
 # from requests.adapters import HTTPAdapter
@@ -30,22 +29,19 @@ import hashget
 import hashget.hashdb
 from hashget.submiturl import submit_url
 
-from hashget.utils import kmgt, Times
+from hashget.utils import kmgt
 import hashget.utils
 from hashget.debian import DebStatus, debsubmit
 from hashget.restorefile import RestoreFile
 
-
-
 BUF_SIZE = 1024*1024
 
 repo = dict()
-log=None
-hashdb = None
+log = None
+
 
 def download_file(url, prefix="/tmp", headers=None):
     headers = headers or dict()
-    out = dict()
 
     chunk_size = 1024*1024
     basename = url.split('/')[-1]
@@ -58,11 +54,10 @@ def download_file(url, prefix="/tmp", headers=None):
         
     with open(local_filename, 'wb') as f:
         for chunk in r.iter_content(chunk_size=chunk_size): 
-            if chunk: # filter out keep-alive new chunks
+            if chunk:  # filter out keep-alive new chunks
                 f.write(chunk)
 
     return local_filename
-
 
 
 def deb2url(root, project, basename):
@@ -80,6 +75,7 @@ def deb2url(root, project, basename):
 # Prepare
 #
 
+
 def prepare(root, hashdb, anchors, filesz, skipdirs, excludefile):
     """
         ANCHORS ??? do we need it here? maybe delete?
@@ -90,12 +86,10 @@ def prepare(root, hashdb, anchors, filesz, skipdirs, excludefile):
     for a in anchors.anchorlist:
         hashdb.pull_anchor(a.get_hashspec())
 
-    ph2url = dict() # package hashes to URLs
+    ph2url = dict()  # package hashes to URLs
     rfile = RestoreFile()
 
-
-
-    with open(excludefile,'w') as excf:
+    with open(excludefile, 'w') as excf:
         for f in files:
             try:
                 """
@@ -115,18 +109,19 @@ def prepare(root, hashdb, anchors, filesz, skipdirs, excludefile):
                 pass
                 
         for hashspec, purl in ph2url.items():
-            rfile.add_package(url = purl, hashspec = hashspec)
+            rfile.add_package(url=purl, hashspec=hashspec)
         
-        rfile.save(os.path.join(root,'.hashget-restore'))
+        rfile.save(os.path.join(root, '.hashget-restore'))
     log.info("saved: {}".format(rfile))
 
     # guess_packages(root, files)
 
+
 def prepare_readfiles(root, anchors, filesz, skipdirs):
 
-    def skipdir(d, skipdirs):
+    def skipdir(d, dirs):
         # maybe skip it?
-        for sd in skipdirs:
+        for sd in dirs:
             if (d+'/').startswith(sd):
                 return True
         return False
@@ -138,8 +133,7 @@ def prepare_readfiles(root, anchors, filesz, skipdirs):
     
         if skipdir(directory, skipdirs):
             continue
-                
-    
+
         for basename in dirfiles:
             total += 1        
             path = os.path.join(directory, basename)                        
@@ -152,8 +146,8 @@ def prepare_readfiles(root, anchors, filesz, skipdirs):
                 files.append(f)
             anchors.check_append(f)
 
-            #if f.size > 100*1024:
-            #    anchors.append(f)
+            # if f.size > 100*1024:
+            #     anchors.append(f)
 
     # sort anchors
     # files = hashget.FileList(sorted(files, key = lambda k: getattr(k,'size'), reverse=True))
@@ -164,7 +158,7 @@ def prepare_readfiles(root, anchors, filesz, skipdirs):
 #
 # PostUnpack
 #
-def postunpack(root, hashdb, usermode = False, recursive = False):
+def postunpack(root, usermode=False, recursive=False):
     """
         Restore files after untarring
     """
@@ -176,6 +170,7 @@ def postunpack(root, hashdb, usermode = False, recursive = False):
     stat_downloaded = 0
     stat_recovered = 0
     stat_files = 0
+    stat_ufiles = 0
     started = time.time()
 
     log.debug('downloading/unpacking packages...')
@@ -183,7 +178,7 @@ def postunpack(root, hashdb, usermode = False, recursive = False):
     for purl in rfile.packages():
 
         log.debug('restore from URL ' + purl)
-        p = hashget.package.Package(url = purl)
+        p = hashget.package.Package(url=purl)
         p.recursive = recursive
         p.download()
         p.unpack()
@@ -192,46 +187,52 @@ def postunpack(root, hashdb, usermode = False, recursive = False):
         for pf in p.files:
             hashspec = pf.get_hashspec()
 
-            for rf in rfile.fbyhash(hashspec):
-                print('recovered {} {}'.format(p.basename, rf.relpath()))
-                rf.recover(pf.filename, usermode=usermode)
-                rfile.set_processed(hashspec)
-                stat_recovered += rf.size
-                stat_files += 1
-                
+            if rfile.should_process(hashspec):
+                for rf in rfile.fbyhash(hashspec):
+                    log.debug('recovered {} {}'.format(p.basename, rf.relpath()))
+                    rf.recover(pf.filename, usermode=usermode)
+                    rfile.set_processed(hashspec)
+                    stat_recovered += rf.size
+                    stat_files += 1
+
         stat_cached += p.stat_cached
         stat_downloaded += p.stat_downloaded
         p.cleanup()                        
 
-    log.debug('Recovered {} files {} bytes ({} downloaded, {} cached) in {:.2f}s'.format(
-            stat_files,
+    nfiles = rfile.get_nfiles()
+
+    print('Recovered {}/{} files {} bytes ({} downloaded, {} cached) in {:.2f}s'.format(
+            stat_files, nfiles,
             kmgt(stat_recovered),
             kmgt(stat_downloaded),
             kmgt(stat_cached),
             time.time() - started
         ))
 
+    stat_files -= 1
+
     rfile.check_processed()
     # delete tmpdir
 
 
-def get_by_sig(sigtype, sig, outdir=None):
+def get_by_sig(hashdb, sigtype, sig, outdir=None):
     try:
         hp = hashdb.sig2hp(sigtype, sig, remote=True)
     except KeyError:
         log.error("sig {} not found in hashdb".format(sig))
         return
 
-    p = hashget.package.Package(url = hp.url, log=log)
+    p = hashget.package.Package(url=hp.url, log=log)
     p.download()
     dst = os.path.join(outdir, p.basename)
     shutil.copy(p.path, dst)
     log.info(dst)
     return dst
 
+
 def get_by_hashspec(hashdb, hashspec, outdir):
     """
-
+    :param hashdb: hashdb
     :param hashspec: either hashspec (sha256:aabb...) or debsib
     :param outdir:
     :return:
@@ -243,7 +244,7 @@ def get_by_hashspec(hashdb, hashspec, outdir):
         log.error("{} not found in hashdb".format(hashspec))
         return
 
-    p = hashget.package.Package(url = hp.url, log=log)
+    p = hashget.package.Package(url=hp.url, log=log)
     p.download()
     if p.hashes.match_hashspec(hashspec):
         dst = os.path.join(outdir, p.basename)
@@ -257,20 +258,22 @@ def get_by_hashspec(hashdb, hashspec, outdir):
     p.cleanup() 
     log.info(dst)
 
+
 def main():
 
-    global log, hashdb
+    global log
 
     def_anchsz = 100*1024
     def_filesz = 1024
     def_hashserver = list(('https://hashdb.okerr.com/hashdb/',))
     def_project = None
     def_excludefile = os.path.expanduser("~/hashget-exclude") 
-    def_skipdirs = ['var/cache/','var/lib/apt/']
+    def_skipdirs = ['var/cache/', 'var/lib/apt/']
     def_sleep = 2
     def_outdir = '.'
 
-    parser = argparse.ArgumentParser(description='HashGet ver {} deduplication and compression tool'.format(hashget.__version__))
+    parser = argparse.ArgumentParser(description='HashGet ver {} deduplication and compression tool'.
+                                     format(hashget.__version__))
 
     g = parser.add_argument_group('Packing/unpacking')
     g.add_argument('--prepack', '-p', default=None, metavar='DIR', help='prepare DIR for hash-tarring')
@@ -279,7 +282,6 @@ def main():
     g = parser.add_argument_group('Fetching packages and files')
     g.add_argument('--get', default=None, metavar='HASHSPEC', help='get file by hash')
     g.add_argument('--fetch', default=None, help='fetch .deb file by basename or hash specification (sha256:aabbcc...)')
-
 
     g = parser.add_argument_group('Local HashDB commands')
     g.add_argument('--submit', default=None, metavar='URL', help='submit URL to --project')
@@ -290,29 +292,30 @@ def main():
     g.add_argument('--anchsz', type=int, default=def_anchsz, help='min size of anchors ({})'.format(def_anchsz))
     g.add_argument('--filesz', type=int, default=def_filesz, help='min size of files ({})'.format(def_filesz))
     g.add_argument('--project', default=def_project, help='project name ({})'.format(def_project))
-#    g.add_argument('--repo', nargs=2, action='append', metavar=('REPO_TAG', 'REPO_URL'), default=list(), help='repositories (many)')
     g.add_argument('--sleep', type=int, default=def_sleep, help='delay ({}s)'.format(def_sleep))
-    g.add_argument('--fanchor', nargs='+', metavar='FILEGLOB', default=list(), help='forced anchor glob, e.g. --fanchor ".*Makefile" etc/passwd')
+    g.add_argument('--fanchor', nargs='+', metavar='FILEGLOB', default=list(),
+                   help='forced anchor glob, e.g. --fanchor ".*Makefile" etc/passwd')
 
     g = parser.add_argument_group('Other options')
     g.add_argument('--hashserver', nargs='*', default=def_hashserver, help='hashserver URL ({})'.format(def_hashserver))
     g.add_argument('--hashdb', default=None, help='path to local hashdb directory')
-    g.add_argument('-X','--exclude-from', metavar='FILENAME', dest='excludefile', default=def_excludefile, help='Exclude file (for -X tar option) ({})'.format(def_excludefile))
+    g.add_argument('-X', '--exclude-from', metavar='FILENAME', dest='excludefile', default=def_excludefile,
+                   help='Exclude file (for -X tar option) ({})'.format(def_excludefile))
     g.add_argument('--etag', default=False, action='store_true', help='verify HTTP E-Tag when reuse cached files')
     g.add_argument('--outdir', '-o', default=def_outdir, help='dir where to store --get files ({})'.format(def_outdir))
     g.add_argument('--file', '-f', default=None, help='filename (if already downloaded)')
-    g.add_argument('--user', default=False, action='store_true', help='user mode (for --postunpack). do not set owner for files')
+    g.add_argument('--user', default=False, action='store_true',
+                   help='user mode (for --postunpack). do not set owner for files')
     g.add_argument('--recursive', default=False, action='store_true', help='recursive unpacking (slower).')
 
-
     g = parser.add_argument_group('Target system specification')
-    g.add_argument('--skip', nargs='*', default=def_skipdirs, help='Do not try to dedup these dirs ({}). Relative to --prepare path'.format(def_skipdirs))
+    g.add_argument('--skip', nargs='*', default=def_skipdirs,
+                   help='Do not try to dedup these dirs ({}). Relative to --prepare path'.format(def_skipdirs))
 
     g = parser.add_argument_group('Logging, output')
     g.add_argument('--logfile', default=None, help='log file name')
     g.add_argument('-v', dest='verbose', default=False, action='store_true', help='verbose mode')
     g.add_argument('-q', dest='quiet', default=False, action='store_true', help='quiet mode')
-
 
     args = parser.parse_args()
 
@@ -336,11 +339,8 @@ def main():
 
     hashget.cacheget.opt_verify_etag = args.etag
 
-
     log = logging.getLogger('hashget')
     log.setLevel(loglevel)
-    # logging.basicConfig(level = loglevel, format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    #log.basicConfig(level = loglevel, format='%(message)s')
 
     logstdout = logging.StreamHandler()
     logstdout.setFormatter(logging.Formatter('%(message)s', '%Y-%m-%d %H:%M:%S'))
@@ -404,32 +404,33 @@ def main():
             }
 
             submit_url(
-                url = p.url,
-                hashdb = hashdb,
-                project = 'debsnap',
-                anchors = anchors,
-                filesz = args.filesz,
-                signatures = signatures)
+                url=p.url,
+                hashdb=hashdb,
+                project='debsnap',
+                anchors=anchors,
+                filesz=args.filesz,
+                signatures=signatures)
 
             cnt_new += 1
             time.sleep(args.sleep)
 
-        print("Crawling done in {:.2f}s. {} total, {} new, {} already in db.".format(time.time() - started, cnt_total, cnt_new, cnt_already))
+        print("Crawling done in {:.2f}s. {} total, {} new, {} already in db.".format(
+            time.time() - started, cnt_total, cnt_new, cnt_already))
 
     if args.prepack:
 
-        skipdirs = [ os.path.join(args.prepack, d) for d in args.skip ]    
+        skipdirs = [os.path.join(args.prepack, d) for d in args.skip]
                           
         prepare(args.prepack,
-            hashdb = hashdb,
-            anchors = anchors,
-            filesz = args.filesz,
-            skipdirs = skipdirs,
-            excludefile = args.excludefile,
-            )
+                hashdb=hashdb,
+                anchors=anchors,
+                filesz=args.filesz,
+                skipdirs=skipdirs,
+                excludefile=args.excludefile
+                )
 
     if args.postunpack:
-        postunpack(args.postunpack, hashdb = hashdb, usermode=args.user, recursive = args.recursive)
+        postunpack(args.postunpack, usermode=args.user, recursive=args.recursive)
 
     if args.get:
         if args.get.startswith('sha256:'):
@@ -439,7 +440,7 @@ def main():
                 sig = args.get[:-4]
             else:
                 sig = args.get
-            get_by_sig('deb', sig, args.outdir)
+            get_by_sig(hashdb, 'deb', sig, args.outdir)
 
     if args.submit:
 
@@ -448,16 +449,14 @@ def main():
             sys.exit(1)
 
         hashget.submiturl.submit_url(
-            url = args.submit,
-            file = args.file,
-            project = args.project,
-            anchors = anchors,
-            filesz = args.filesz)
+            url=args.submit,
+            file=args.file,
+            project=args.project,
+            anchors=anchors,
+            filesz=args.filesz)
 
     if args.debsubmit:
         debsubmit(hashdb, args.debsubmit, anchors)
 
+
 main()
-
-
-

@@ -1,5 +1,6 @@
 import re
 
+
 class AnchorList(object):
     """
     Class for filtering anchors

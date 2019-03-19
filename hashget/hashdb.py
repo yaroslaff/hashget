@@ -16,6 +16,7 @@ from . import __user_agent__
 
 log = logging.getLogger('hashget')
 
+
 class HashDB(object):
     """
         Abstract class representing HashDB, local or remote

@@ -5,7 +5,7 @@ import os
 import sys
 
 # check if we run under python 3+
-if sys.version_info.major <3 or (sys.version_info.major == 3 and sys.version_info.minor < 4):
+if sys.version_info.major < 3 or (sys.version_info.major == 3 and sys.version_info.minor < 4):
     raise ValueError('Need python 3.4 or higher')
 
 
@@ -17,8 +17,11 @@ vermod = types.ModuleType(loader.name)
 loader.exec_module(vermod)
 
 sys.path.insert(0, '.')
+
+
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
 
 setup(
     name='hashget',
@@ -26,7 +29,7 @@ setup(
     packages=['hashget'],
     scripts=['bin/hashget', 'bin/hashget-admin'],
 
-    install_requires=['patool','filetype','filelock','setuptools'],
+    install_requires=['patool','filetype','filelock','setuptools', 'requests'],
 
     url='https://gitlab.com/yaroslaff/hashget',
     license='MIT',
