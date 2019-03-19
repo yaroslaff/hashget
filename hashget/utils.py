@@ -3,6 +3,9 @@ import shutil
 import hashlib
 from tempfile import mkdtemp
 import patoolib
+import time
+
+unpack_suffixes = [ '.deb', '.gz', '.xz' ]
 
 def sha1sum(filename):
     h  = hashlib.sha1()
@@ -78,11 +81,15 @@ def kmgt(sz, frac=1):
             return tpl.format(n,k)
 
 
-def recursive_unpack(path, udir='/tmp'):
+def recursive_unpack(path, udir='/tmp', recursive=True):
     """
         Recursively unpack archive and all archives in content
         Deletes symlinks
     """
+
+    if all( not path.endswith(suffix) for suffix in unpack_suffixes ):
+        # print("skip {}".format(path))
+        return None
 
     try:
         patoolib.test_archive(path, verbosity=-1)
@@ -95,13 +102,29 @@ def recursive_unpack(path, udir='/tmp'):
     for f in dircontent(nudir):
         if os.path.islink(f):
             os.unlink(f)
-    
-    for f in dircontent(nudir):
-        if os.path.isfile(f) and not os.path.islink(f):
-            recursive_unpack(f, nudir)
+
+    if recursive:
+        for f in dircontent(nudir):
+            if os.path.isfile(f) and not os.path.islink(f):
+                recursive_unpack(f, nudir)
                 
     return nudir
     
-    
-    
+class Times():
 
+    def __init__(self):
+        self.times = list()
+        self.add('init')
+
+    def add(self,name):
+        self.times.append((name, time.time()))
+
+    def dump(self):
+        lasttime = None
+        for ttuple in self.times:
+            if lasttime is None:
+                lasttime = ttuple[1]
+                continue
+
+            print("{}: {:.2f}s".format(ttuple[0], ttuple[1]-lasttime))
+            lasttime = ttuple[1]

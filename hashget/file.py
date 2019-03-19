@@ -130,6 +130,7 @@ class File():
         if not usermode:
             os.chown(self.filename, self.uid, self.gid)
 
+
 class FileList(list):
     
     def getbymd5(self, digest):

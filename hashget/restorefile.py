@@ -53,10 +53,12 @@ class RestoreFile(object):
         with open(path) as f:
             self.data = json.load(f)
     
-    def set_processed(self, h):
+    def set_processed(self, hashspec):
+        spec, hsum = hashspec.split(':')
+
         for fdata in self.data['files']:
-            if fdata['sha256'] == h:
-                fdata['processed'] = False     
+            if fdata[spec] == hsum:
+                fdata['processed'] = True
         
     
     def preiteration(self):
@@ -74,4 +76,16 @@ class RestoreFile(object):
                 len(self.data['files']),
                 len(self.data['packages']),
                 utils.kmgt(self.sumsize()))
-        
+
+    def check_processed(self):
+        print("check processed")
+        np = 0
+        nnp =0
+
+        for fdata in self.data['files']:
+            if fdata['processed']:
+                np += 1
+            else:
+                print("NO PROCESSED {}".format(fdata))
+                nnp += 1
+        print("processed: {} files, not processed {} files".format(np, nnp))

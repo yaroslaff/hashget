@@ -21,6 +21,7 @@ import sys
 import time
 import logging
 import shutil
+import datetime
 
 # from requests.packages.urllib3.util.retry import Retry
 # from requests.adapters import HTTPAdapter
@@ -29,9 +30,12 @@ import hashget
 import hashget.hashdb
 from hashget.submiturl import submit_url
 
-from hashget.utils import kmgt
+from hashget.utils import kmgt, Times
+import hashget.utils
 from hashget.debian import DebStatus, debsubmit
 from hashget.restorefile import RestoreFile
+
+
 
 BUF_SIZE = 1024*1024
 
@@ -160,7 +164,7 @@ def prepare_readfiles(root, anchors, filesz, skipdirs):
 #
 # PostUnpack
 #
-def postunpack(root, hashdb, usermode=False):
+def postunpack(root, hashdb, usermode = False, recursive = False):
     """
         Restore files after untarring
     """
@@ -173,16 +177,14 @@ def postunpack(root, hashdb, usermode=False):
     stat_recovered = 0
     stat_files = 0
     started = time.time()
-    
-    for purl in rfile.packages():
-        #pbasename = purl.split('/')[-1]
-        #ptdir = os.path.join(tdir, pbasename)
-        #os.mkdir(ptdir)
 
-        # lp = cg.get(purl)
-        
+    log.debug('downloading/unpacking packages...')
+
+    for purl in rfile.packages():
+
         log.debug('restore from URL ' + purl)
         p = hashget.package.Package(url = purl)
+        p.recursive = recursive
         p.download()
         p.unpack()
         p.read_files()
@@ -191,15 +193,16 @@ def postunpack(root, hashdb, usermode=False):
             hashspec = pf.get_hashspec()
 
             for rf in rfile.fbyhash(hashspec):
-                print('recovered ' + rf.filename)
+                print('recovered {} {}'.format(p.basename, rf.relpath()))
                 rf.recover(pf.filename, usermode=usermode)
+                rfile.set_processed(hashspec)
                 stat_recovered += rf.size
                 stat_files += 1
                 
         stat_cached += p.stat_cached
         stat_downloaded += p.stat_downloaded
         p.cleanup()                        
-    
+
     log.debug('Recovered {} files {} bytes ({} downloaded, {} cached) in {:.2f}s'.format(
             stat_files,
             kmgt(stat_recovered),
@@ -207,7 +210,8 @@ def postunpack(root, hashdb, usermode=False):
             kmgt(stat_cached),
             time.time() - started
         ))
-    
+
+    rfile.check_processed()
     # delete tmpdir
 
 
@@ -298,11 +302,11 @@ def main():
     g.add_argument('--outdir', '-o', default=def_outdir, help='dir where to store --get files ({})'.format(def_outdir))
     g.add_argument('--file', '-f', default=None, help='filename (if already downloaded)')
     g.add_argument('--user', default=False, action='store_true', help='user mode (for --postunpack). do not set owner for files')
+    g.add_argument('--recursive', default=False, action='store_true', help='recursive unpacking (slower).')
 
 
     g = parser.add_argument_group('Target system specification')
     g.add_argument('--skip', nargs='*', default=def_skipdirs, help='Do not try to dedup these dirs ({}). Relative to --prepare path'.format(def_skipdirs))
-
 
     g = parser.add_argument_group('Logging, output')
     g.add_argument('--logfile', default=None, help='log file name')
@@ -425,7 +429,7 @@ def main():
             )
 
     if args.postunpack:
-        postunpack(args.postunpack, hashdb = hashdb, usermode=args.user)
+        postunpack(args.postunpack, hashdb = hashdb, usermode=args.user, recursive = args.recursive)
 
     if args.get:
         if args.get.startswith('sha256:'):

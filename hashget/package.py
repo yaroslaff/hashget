@@ -31,6 +31,7 @@ class Package(object):
         self.basename = None
         self.files = list()
         self.sum_size = 0
+        self.recursive = True
 
         self.stat_downloaded = 0
         self.stat_cached = 0
@@ -77,7 +78,7 @@ class Package(object):
     
     def unpack(self):                
         
-        self.unpacked = utils.recursive_unpack(self.path)
+        self.unpacked = utils.recursive_unpack(self.path, recursive=self.recursive)
 
         if self.unpacked:
             # remove links
