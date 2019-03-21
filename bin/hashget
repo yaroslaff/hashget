@@ -189,7 +189,7 @@ def postunpack(root, usermode=False, recursive=False):
         p.unpack()
         p.read_files()
         
-        for pf in p.files:
+        for pf in p.all_files():
             hashspec = pf.get_hashspec()
 
             if rfile.should_process(hashspec):

@@ -68,18 +68,13 @@ class Package(object):
         # someone forgot to unpack before read_files
         assert(self.unpacked)
 
-        # load package file itself
-        f = file.File(self.path)
-        self.files.append(f)
-
         for path in utils.dircontent(self.unpacked):
             if os.path.isfile(path) and not os.path.islink(path):
                 f = file.File(path, root=self.unpacked)
                 self.files.append(f)
                 self.sum_size += f.size
             
-            
-    
+
     def unpack(self):                
         
         self.unpacked = utils.recursive_unpack(self.path, recursive=self.recursive)
@@ -122,4 +117,10 @@ class Package(object):
     def cleanup(self):
         if self.unpacked:
             utils.rmrf(self.unpacked)
-            
+
+    def all_files(self):
+        # first: return package itself
+        yield file.File(self.path, root=os.path.dirname(self.path))
+
+        for f in self.files:
+            yield f
