@@ -326,8 +326,10 @@ def main():
     def_filesz = 1024
     def_hashserver = list(('https://hashdb.okerr.com/hashdb/',))
     def_project = None
-    def_excludefile = os.path.expanduser("~/hashget-exclude") 
+    def_excludefile = None
+#    def_excludefile = os.path.expanduser("~/hashget-exclude")
     def_skipdirs = ['var/lib/apt/']
+    def_excdirs = []
     def_sleep = 2
     def_outdir = '.'
     def_target = 'auto'
@@ -377,8 +379,8 @@ def main():
                    help='Target specification (files/debian/auto) ({})'.format(def_target))
     g.add_argument('--skip', nargs='*', default=def_skipdirs,
                    help='Do not try to dedup these dirs ({}). Relative to --prepare path'.format(def_skipdirs))
-    g.add_argument('--exclude', nargs='*', default=def_skipdirs,
-                   help='Do not try to dedup these dirs ({}). Relative to --prepare path'.format(def_skipdirs))
+    g.add_argument('--exclude', nargs='*', default=def_excdirs,
+                   help='Do not include these dirs in achive ({}). Relative to --prepare path. Passed to tar as-is.'.format(def_excdirs))
 
 
     g = parser.add_argument_group('Logging, output')
@@ -438,13 +440,19 @@ def main():
     if args.prepack:
 
         skipdirs = [os.path.join(args.prepack, d) for d in args.skip]
-                          
+
+        if args.excludefile is None:
+            excludefile = tempfile.mktemp(prefix='hashget-exclude-')
+            log.info('exclude file: -X {}'.format(excludefile))
+        else:
+            excludefile = args.excludefile
+
         prepare(args.prepack,
                 hashdb=hashdb,
                 anchors=anchors,
                 filesz=args.filesz,
                 skipdirs=skipdirs,
-                excludefile=args.excludefile
+                excludefile=excludefile
                 )
 
     if args.postunpack:
@@ -524,6 +532,8 @@ def main():
         cmd.extend(['-C', path, '.'])
         cmd.extend(['-C', tmpdir, '.hashget-restore'])
 
+
+        log.debug('Run: {}'.format(cmd))
 
         subprocess.run(cmd)
 

@@ -320,9 +320,9 @@ class HashServer():
         :return:
         """
 
-        log.debug(self.fhash2url(hashspec))
 
         r = requests.get(self.fhash2url(hashspec))
+
         if r.status_code != 200:
             raise KeyError
 
@@ -600,7 +600,6 @@ class HashDBClient(HashDB):
 
         if remote:
             for hs in self.hashserver:
-                log.debug(hs)
                 hp = hs.hash2hp(hspec)
                 return hp
 
@@ -613,6 +612,7 @@ class HashDBClient(HashDB):
         :param hashspec: hash of anchor (sha256:aabbcc...)
         :return: None if already exists, True if pulled, False if missing on hashservers
         """
+
         try:
             self.hash2hp(hashspec, remote=False)
             return None
