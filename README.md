@@ -25,23 +25,10 @@ Create debian machine (optional). Later with this example we will use 'mydebvm' 
 # lxc-create -n mydebvm -t download -- --dist=debian --release=stretch --arch=amd64
 ~~~
 
-Update local and network hashdb with packages from this VM. (optional, but very recommended to get maximal efficiency)
-~~~
-# hashget --debcrawl /var/lib/lxc/mydebvm/rootfs/ 
-~~~
 
-Now, main work, prepare 
+Now, the magic: create .tar.gz without files which could be downloaded from Internet.
 ~~~
-# hashget -p /var/lib/lxc/mydebvm/rootfs/
-Development hashget hashdb repository
-https://gitlab.com/yaroslaff/hashget
-saved: 5905 files, 133 pkgs, size: 165.3M
-~~~
-Creates .hashget-restore file in rootfs and (by default) creates `gethash-exclude` file (for later tar command) in homedir of current user.
-
-Now, compress:
-~~~
-# tar -czf /tmp/mydebvm.tar.gz -X ~/hashget-exclude --exclude='var/lib/apt/lists' -C /var/lib/lxc/mydebvm/rootfs .
+# hashget --pack /var/lib/lxc/mydebvm/rootfs/ -zf mydebvm.tar.gz --exclude var/lib/apt/lists
 ~~~
 
 Now lets compare results with usual tarring
@@ -57,7 +44,7 @@ Now lets compare results with usual tarring
 -rw-r--r-- 1 root root 29M Mar  4 21:59 /tmp/mydebvm.tar.gz
 ~~~
 
-Optimized backup is 70Mb shorter, just 29 instead of 99, 70% saved!
+Optimized backup is 70Mb shorter, just 29 instead of 99, 70% saved! If you pay for storing your backups (e.g. on Amazon Glacier, you now will pay just $29 where before you paid $99).
 
 After this step, you have very small (just 29Mb for 300Mb+ generic debian 9 LXC machine rootfs)
 

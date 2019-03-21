@@ -210,7 +210,7 @@ class DirHashDB(HashDB):
         self.loaded = True
 
     def basename2hp(self, basename):
-        for hp in self.packages:
+        for hp in self.packages_iter():
             if hp.basename() == basename:
                 return hp
         raise KeyError
@@ -256,6 +256,7 @@ class DirHashDB(HashDB):
         self.packages.append(hp)
         phash = hp.get_phash()
 
+        # add sum of package itself, for hash
         for hsum in hp.hashes:
             self.__h2hp[hsum] = hp
 
@@ -270,6 +271,10 @@ class DirHashDB(HashDB):
 
 
 class HashServer():
+    """
+        Interface to remote HashServer
+
+    """
     def __init__(self, url = None):
         self.url = url
         self.config=dict()
@@ -292,7 +297,7 @@ class HashServer():
             self.config = {**self.config, **json.loads(r.text)}
 
         r = requests.get(urllib.parse.urljoin(self.url, self.config['motd']), headers=headers)
-        print(r.text.rstrip())
+        log.info(r.text.rstrip())
 
 
     def fhash2url(self, hashspec):

@@ -8,6 +8,7 @@ import json
 import logging
 
 import hashget
+import hashget.hashdb
 
 import filelock
 

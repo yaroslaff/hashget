@@ -68,6 +68,10 @@ class Package(object):
         # someone forgot to unpack before read_files
         assert(self.unpacked)
 
+        # load package file itself
+        f = file.File(self.path)
+        self.files.append(f)
+
         for path in utils.dircontent(self.unpacked):
             if os.path.isfile(path) and not os.path.islink(path):
                 f = file.File(path, root=self.unpacked)

@@ -21,6 +21,9 @@ import sys
 import time
 import logging
 import shutil
+import tempfile
+import subprocess
+
 
 # from requests.packages.urllib3.util.retry import Retry
 # from requests.adapters import HTTPAdapter
@@ -76,10 +79,12 @@ def deb2url(root, project, basename):
 #
 
 
-def prepare(root, hashdb, anchors, filesz, skipdirs, excludefile):
+def prepare(root, hashdb, anchors, filesz, skipdirs, excludefile, restorefile=None):
     """
         ANCHORS ??? do we need it here? maybe delete?
     """
+
+    restorefile = restorefile or os.path.join(root, '.hashget-restore')
 
     files = prepare_readfiles(root, anchors, filesz, skipdirs)
 
@@ -111,7 +116,7 @@ def prepare(root, hashdb, anchors, filesz, skipdirs, excludefile):
         for hashspec, purl in ph2url.items():
             rfile.add_package(url=purl, hashspec=hashspec)
         
-        rfile.save(os.path.join(root, '.hashget-restore'))
+        rfile.save(restorefile)
     log.info("saved: {}".format(rfile))
 
     # guess_packages(root, files)
@@ -259,6 +264,60 @@ def get_by_hashspec(hashdb, hashspec, outdir):
     log.info(dst)
 
 
+def debcrawl(hashdb, path, anchors):
+    cnt_total = 0
+    cnt_already = 0
+    cnt_new = 0
+
+    started = time.time()
+
+    # ensure debsnap project exists
+    hashdb.create_project('debsnap')
+
+    debstatus = DebStatus(path)
+    np = debstatus.n_installed
+    print("Total: {} packages".format(np))
+
+    for p in debstatus.packages_iter():
+
+        cnt_total += 1
+
+        if hashdb.sig_present('deb', p.signature, remote=False):
+            log.debug('[{}/{}] local {}'.format(cnt_total, np, p.signature))
+            continue
+
+        if hashdb.pull_sig('deb', p.signature):
+            log.info('[{}/{}] pulled {} from hashserver'.format(cnt_total, np, p.signature))
+            continue
+
+        url = p.url
+        if url is None:
+            log.warning('[{}/{}] FAILED to crawl {}'.format(cnt_total, np, p.signature))
+            continue
+
+        log.info("[{}/{}] crawl {}".format(cnt_total, np, p.url))
+
+        anchors.clean_list()
+
+        signatures = {
+            'deb': p.signature
+        }
+
+        submit_url(
+            url=p.url,
+            hashdb=hashdb,
+            project='debsnap',
+            anchors=anchors,
+            filesz=args.filesz,
+            signatures=signatures)
+
+        cnt_new += 1
+        time.sleep(args.sleep)
+
+    print("Crawling done in {:.2f}s. {} total, {} new, {} already in db.".format(
+        time.time() - started, cnt_total, cnt_new, cnt_already))
+
+
 def main():
 
     global log
@@ -268,14 +327,17 @@ def main():
     def_hashserver = list(('https://hashdb.okerr.com/hashdb/',))
     def_project = None
     def_excludefile = os.path.expanduser("~/hashget-exclude") 
-    def_skipdirs = ['var/cache/', 'var/lib/apt/']
+    def_skipdirs = ['var/lib/apt/']
     def_sleep = 2
     def_outdir = '.'
+    def_target = 'auto'
 
     parser = argparse.ArgumentParser(description='HashGet ver {} deduplication and compression tool'.
                                      format(hashget.__version__))
 
     g = parser.add_argument_group('Packing/unpacking')
+    g.add_argument('--pack', default=None, metavar='DIR',
+                   help='Make .tar.gz of dir into -f file (set of --debcrawl, --prepack and then tar -czf .. -X)')
     g.add_argument('--prepack', '-p', default=None, metavar='DIR', help='prepare DIR for hash-tarring')
     g.add_argument('--postunpack', '-u', default=None, metavar='DIR', help='post-unpack')
 
@@ -303,14 +365,21 @@ def main():
                    help='Exclude file (for -X tar option) ({})'.format(def_excludefile))
     g.add_argument('--etag', default=False, action='store_true', help='verify HTTP E-Tag when reuse cached files')
     g.add_argument('--outdir', '-o', default=def_outdir, help='dir where to store --get files ({})'.format(def_outdir))
-    g.add_argument('--file', '-f', default=None, help='filename (if already downloaded)')
+    g.add_argument('--file', '-f', default=None, help='filename (for --submit and --pack)')
     g.add_argument('--user', default=False, action='store_true',
                    help='user mode (for --postunpack). do not set owner for files')
     g.add_argument('--recursive', default=False, action='store_true', help='recursive unpacking (slower).')
+    g.add_argument('-z', default=False, action='store_true', help='gzip tarred archive')
+
 
     g = parser.add_argument_group('Target system specification')
+    g.add_argument('--target', '-t', default=def_target,
+                   help='Target specification (files/debian/auto) ({})'.format(def_target))
     g.add_argument('--skip', nargs='*', default=def_skipdirs,
                    help='Do not try to dedup these dirs ({}). Relative to --prepare path'.format(def_skipdirs))
+    g.add_argument('--exclude', nargs='*', default=def_skipdirs,
+                   help='Do not try to dedup these dirs ({}). Relative to --prepare path'.format(def_skipdirs))
+
 
     g = parser.add_argument_group('Logging, output')
     g.add_argument('--logfile', default=None, help='log file name')
@@ -342,7 +411,7 @@ def main():
     log = logging.getLogger('hashget')
     log.setLevel(loglevel)
 
-    logstdout = logging.StreamHandler()
+    logstdout = logging.StreamHandler(stream=sys.stderr)
     logstdout.setFormatter(logging.Formatter('%(message)s', '%Y-%m-%d %H:%M:%S'))
     log.addHandler(logstdout)
 
@@ -364,58 +433,7 @@ def main():
     """
      
     if args.debcrawl:
-
-        cnt_total = 0
-        cnt_already = 0
-        cnt_new = 0
-
-        started = time.time()
-
-        # ensure debsnap project exists
-        hashdb.create_project('debsnap')
-
-        debstatus = DebStatus(args.debcrawl)
-        np = debstatus.n_installed
-        print("Total: {} packages".format(np))
-
-        for p in debstatus.packages_iter():
-
-            cnt_total += 1
-
-            if hashdb.sig_present('deb', p.signature, remote=False):
-                log.debug('[{}/{}] local {}'.format(cnt_total, np, p.signature))
-                continue
-
-            if hashdb.pull_sig('deb', p.signature):
-                log.info('[{}/{}] pulled {} from hashserver'.format(cnt_total, np, p.signature))
-                continue
-
-            url = p.url
-            if url is None:
-                log.warning('[{}/{}] FAILED to crawl {}'.format(cnt_total, np, p.signature))
-                continue
-
-            log.info("[{}/{}] crawl {}".format(cnt_total, np, p.url))
-
-            anchors.clean_list()
-
-            signatures = {
-                'deb': p.signature
-            }
-
-            submit_url(
-                url=p.url,
-                hashdb=hashdb,
-                project='debsnap',
-                anchors=anchors,
-                filesz=args.filesz,
-                signatures=signatures)
-
-            cnt_new += 1
-            time.sleep(args.sleep)
-
-        print("Crawling done in {:.2f}s. {} total, {} new, {} already in db.".format(
-            time.time() - started, cnt_total, cnt_new, cnt_already))
+        debcrawl(hashdb=hashdb, path=args.debcrawl, anchors=anchors)
 
     if args.prepack:
 
@@ -458,5 +476,64 @@ def main():
     if args.debsubmit:
         debsubmit(hashdb, args.debsubmit, anchors)
 
+    if args.pack:
+        path = args.pack
+        if args.target == 'auto':
+            statusfile = os.path.join(path, 'var/lib/dpkg/status')
+            if(os.path.isfile(statusfile)):
+                target = 'debian'
+            else:
+                target = 'files'
+        else:
+            target = args.target
+        log.debug("target type: {}".format(target))
+
+        if target == 'debian':
+            debcrawl(hashdb=hashdb, path=path, anchors=anchors)
+
+        skipdirs = [os.path.join(path, d) for d in args.skip]
+
+        tmpdir = tempfile.mkdtemp(prefix='hashget-pack-')
+        excludefile = os.path.join(tmpdir, '.hashget-exclude')
+        restorefile = os.path.join(tmpdir, '.hashget-restore')
+
+        prepare(path,
+                hashdb=hashdb,
+                anchors=anchors,
+                filesz=args.filesz,
+                skipdirs=skipdirs,
+                excludefile=excludefile,
+                restorefile=restorefile
+                )
+
+        cmd = ['tar', '-c']
+
+        if args.z:
+            cmd.append('-z')
+
+        if args.file:
+            cmd.extend(['-f', args.file])
+        else:
+            log.error('Need -f argument for --pack')
+            sys.exit(1)
+
+        cmd.extend(['-X', excludefile])
+        for exc_path in args.exclude:
+            cmd.extend(['--exclude', exc_path])
+
+        cmd.extend(['-C', path, '.'])
+        cmd.extend(['-C', tmpdir, '.hashget-restore'])
+
+
+        subprocess.run(cmd)
+
+        # clean up
+        os.unlink(excludefile)
+        os.unlink(restorefile)
+        os.rmdir(tmpdir)
+
+        if args.file:
+            statinfo = os.stat(args.file)
+            log.info('Result file size: {}'.format(kmgt(statinfo.st_size)))
 
 main()
