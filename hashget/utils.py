@@ -31,7 +31,9 @@ def rmrf(dirname):
         if not os.path.islink(path):
             os.chmod(path, 0o777)
     shutil.rmtree(dirname)
-    
+
+def dir_size(root_path = '.'):
+    return sum([os.path.getsize(fp) for fp in (os.path.join(dirpath, f) for dirpath, dirnames, filenames in os.walk(root_path) for f in filenames) if not os.path.islink(fp)])
 
 def dircontent(root):
     """

@@ -20,15 +20,17 @@ git clone https://gitlab.com/yaroslaff/hashget.git
 
 ## QuickStart
 
-Create debian machine (optional). Later with this example we will use 'mydebvm' container in default LXC location.
+You can test on any VM you have. We create debian LXC machine for. Later with this example we will use 'mydebvm' container in default LXC location.
 ~~~
-# lxc-create -n mydebvm -t download -- --dist=debian --release=stretch --arch=amd64
+host# lxc-create -n mydebvm -t download -- --dist=debian --release=stretch --arch=amd64
+host# lxc-attach -n mydebvm
+mydebvm# apt install wget apache2 mysql-server vim
 ~~~
 
 
 Now, the magic: create .tar.gz without files which could be downloaded from Internet.
 ~~~
-# hashget --pack /var/lib/lxc/mydebvm/rootfs/ -zf mydebvm.tar.gz --exclude var/lib/apt/lists
+# hashget -zf /tmp/mydebvm.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ --exclude var/cache/apt var/lib/apt/lists 
 ~~~
 
 Now lets compare results with usual tarring

@@ -34,6 +34,7 @@ from hashget.submiturl import submit_url
 
 from hashget.utils import kmgt
 import hashget.utils
+import hashget.globlist
 from hashget.debian import DebStatus, debsubmit
 from hashget.restorefile import RestoreFile
 
@@ -79,14 +80,14 @@ def deb2url(root, project, basename):
 #
 
 
-def prepare(root, hashdb, anchors, filesz, skipdirs, excludefile, restorefile=None):
+def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None):
     """
         ANCHORS ??? do we need it here? maybe delete?
     """
 
     restorefile = restorefile or os.path.join(root, '.hashget-restore')
 
-    files = prepare_readfiles(root, anchors, filesz, skipdirs)
+    files = prepare_readfiles(root, anchors, filesz, skip)
 
     for a in anchors.anchorlist:
         hashdb.pull_anchor(a.get_hashspec())
@@ -122,27 +123,24 @@ def prepare(root, hashdb, anchors, filesz, skipdirs, excludefile, restorefile=No
     # guess_packages(root, files)
 
 
-def prepare_readfiles(root, anchors, filesz, skipdirs):
-
-    def skipdir(d, dirs):
-        # maybe skip it?
-        for sd in dirs:
-            if (d+'/').startswith(sd):
-                return True
-        return False
+def prepare_readfiles(root, anchors, filesz, skip):
 
     total = 0
     files = list()
 
     for directory, subdirs, dirfiles in os.walk(root):
     
-        if skipdir(directory, skipdirs):
-            continue
+        #if skipdir(directory, skipdirs):
+        #    continue
 
         for basename in dirfiles:
             total += 1        
             path = os.path.join(directory, basename)                        
-            
+
+            if path in skip:
+                log.debug("SKIP {}".format(path))
+                continue
+
             if os.path.islink(path) or not os.path.isfile(path):
                 continue
             
@@ -264,7 +262,7 @@ def get_by_hashspec(hashdb, hashspec, outdir):
     log.info(dst)
 
 
-def debcrawl(hashdb, path, anchors):
+def debcrawl(hashdb, path, anchors, filesz=10000, sleep=1):
     cnt_total = 0
     cnt_already = 0
     cnt_new = 0
@@ -308,11 +306,12 @@ def debcrawl(hashdb, path, anchors):
             hashdb=hashdb,
             project='debsnap',
             anchors=anchors,
-            filesz=args.filesz,
+            filesz=filesz,
             signatures=signatures)
 
         cnt_new += 1
-        time.sleep(args.sleep)
+        log.debug("sleep {}s".format(sleep))
+        time.sleep(sleep)
 
     print("Crawling done in {:.2f}s. {} total, {} new, {} already in db.".format(
         time.time() - started, cnt_total, cnt_new, cnt_already))
@@ -328,8 +327,9 @@ def main():
     def_project = None
     def_excludefile = None
 #    def_excludefile = os.path.expanduser("~/hashget-exclude")
-    def_skipdirs = ['var/lib/apt/']
-    def_excdirs = []
+    def_skip = []
+    def_exclude_dirs = []
+    def_exclude_files = []
     def_sleep = 2
     def_outdir = '.'
     def_target = 'auto'
@@ -377,18 +377,26 @@ def main():
     g = parser.add_argument_group('Target system specification')
     g.add_argument('--target', '-t', default=def_target,
                    help='Target specification (files/debian/auto) ({})'.format(def_target))
-    g.add_argument('--skip', nargs='*', default=def_skipdirs,
-                   help='Do not try to dedup these dirs ({}). Relative to --prepare path'.format(def_skipdirs))
-    g.add_argument('--exclude', nargs='*', default=def_excdirs,
-                   help='Do not include these dirs in achive ({}). Relative to --prepare path. Passed to tar as-is.'.format(def_excdirs))
+    g.add_argument('--exclude', nargs='+', metavar='PATH', default=def_exclude_dirs,
+                   help='Do not include anything under PATH. Relative to --prepare/--pack')
+    #g.add_argument('--exclude-file', nargs='+', metavar='PATH', default=def_exclude_files,
+    #               help='Same as --exclude, but keeps all directories')
+    g.add_argument('--skip', nargs='*', default=def_skip,
+                   help='Do not try to deduplicate these files/dirs ({}). Relative to --prepare/--pack."'
+                        '" (will be included into archive as-is, saves time.)'.format(def_skip))
 
 
     g = parser.add_argument_group('Logging, output')
     g.add_argument('--logfile', default=None, help='log file name')
+    g.add_argument('--version', default=False, action='store_true', help='just print version ({})'.format(hashget.__version__))
     g.add_argument('-v', dest='verbose', default=False, action='store_true', help='verbose mode')
     g.add_argument('-q', dest='quiet', default=False, action='store_true', help='quiet mode')
 
     args = parser.parse_args()
+
+    if args.version:
+        print('HashGet version {}'.format(hashget.__version__))
+        sys.exit(0)
 
     hashdb = hashget.hashdb.HashDBClient(args.hashdb)
     anchors = hashget.AnchorList(args.anchsz)
@@ -433,13 +441,18 @@ def main():
         repo[r[0]]=r[1]
         print("import repo {} {} from args".format(rname, repo[rname]))
     """
-     
+
     if args.debcrawl:
-        debcrawl(hashdb=hashdb, path=args.debcrawl, anchors=anchors)
+        debcrawl(hashdb=hashdb, path=args.debcrawl, anchors=anchors, filesz=args.filesz)
+
+
 
     if args.prepack:
 
-        skipdirs = [os.path.join(args.prepack, d) for d in args.skip]
+        path = args.prepack
+        gl = hashget.globlist.GlobList(root=path)
+        for skip in args.skip + args.exclude:
+            gl.add_relpath(skip)
 
         if args.excludefile is None:
             excludefile = tempfile.mktemp(prefix='hashget-exclude-')
@@ -447,11 +460,11 @@ def main():
         else:
             excludefile = args.excludefile
 
-        prepare(args.prepack,
+        prepare(path,
                 hashdb=hashdb,
                 anchors=anchors,
                 filesz=args.filesz,
-                skipdirs=skipdirs,
+                skip=gl,
                 excludefile=excludefile
                 )
 
@@ -486,6 +499,27 @@ def main():
 
     if args.pack:
         path = args.pack
+
+        nsteps=3
+        step=1
+
+        if not args.file:
+            log.error('Need -f argument for --pack')
+            sys.exit(1)
+
+        # fix args exclude
+        excludelist = list()
+        for epath in args.exclude:
+            if epath.endswith('/'):
+                excludelist.append(epath+'*')
+                log.warning('fixed --exclude {} to {}'.format(epath, epath+'*'))
+            else:
+                excludelist.append(epath)
+
+        gl = hashget.globlist.GlobList(root=path)
+        for skip in args.skip + args.exclude:
+            gl.add_relpath(skip)
+
         if args.target == 'auto':
             statusfile = os.path.join(path, 'var/lib/dpkg/status')
             if(os.path.isfile(statusfile)):
@@ -496,10 +530,20 @@ def main():
             target = args.target
         log.debug("target type: {}".format(target))
 
-        if target == 'debian':
-            debcrawl(hashdb=hashdb, path=path, anchors=anchors)
 
-        skipdirs = [os.path.join(path, d) for d in args.skip]
+        #
+        # STEP 1
+        #
+
+        if target == 'debian':
+            log.info("STEP {}/{} Crawling...".format(step, nsteps))
+            debcrawl(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz)
+        else:
+            log.info("STEP {}/{} Crawling [skipped]...".format(step, nsteps))
+        step += 1
+
+
+        log.info('STEP {}/{} prepare exclude list for packing...'.format(step, nsteps))
 
         tmpdir = tempfile.mkdtemp(prefix='hashget-pack-')
         excludefile = os.path.join(tmpdir, '.hashget-exclude')
@@ -509,10 +553,15 @@ def main():
                 hashdb=hashdb,
                 anchors=anchors,
                 filesz=args.filesz,
-                skipdirs=skipdirs,
+                skip=gl,
                 excludefile=excludefile,
                 restorefile=restorefile
                 )
+
+        step += 1
+
+
+        log.info('STEP {}/{} tarring...'.format(step, nsteps))
 
         cmd = ['tar', '-c']
 
@@ -521,12 +570,9 @@ def main():
 
         if args.file:
             cmd.extend(['-f', args.file])
-        else:
-            log.error('Need -f argument for --pack')
-            sys.exit(1)
 
         cmd.extend(['-X', excludefile])
-        for exc_path in args.exclude:
+        for exc_path in excludelist:
             cmd.extend(['--exclude', exc_path])
 
         cmd.extend(['-C', path, '.'])
@@ -544,6 +590,6 @@ def main():
 
         if args.file:
             statinfo = os.stat(args.file)
-            log.info('Result file size: {}'.format(kmgt(statinfo.st_size)))
+            log.info('{} ({}) packed into {} ({})'.format(path, kmgt(hashget.utils.dir_size(path)), args.file, kmgt(statinfo.st_size)))
 
 main()
