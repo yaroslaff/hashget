@@ -488,6 +488,7 @@ def main():
             sys.exit(1)
 
         hashget.submiturl.submit_url(
+            hashdb=hashdb,
             url=args.submit,
             file=args.file,
             project=args.project,
