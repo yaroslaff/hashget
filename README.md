@@ -149,14 +149,14 @@ Hashget packs this into 8 Mb in 28 seconds (on my Core i5 computer) vs 426Mb in 
 It's two times faster and 53 times more effective on indexed static files.
 
 
-## What you shoul NOT index
+## What you should NOT index
 You should index ONLY static and permanent files, which will be available on same URL with same content.
 Not all projects provides such files. Usual linux package repositories has only latest files so it's not good for this
 purpose, but debian has great [snapshot.debian.org](https://snapshot.debian.org/) repository, which makes Debian great 
 for hashget compression.
 
-Do not index *latest* files, because content will change later (not _static_). E.g. you may index 
-https://wordpress.org/wordpress-5.1.1.zip but you shouldn't index https://wordpress.org/latest.zip 
+Do not index *latest* files, because content will change later (it's not _static_). E.g. you may index 
+https://wordpress.org/wordpress-5.1.1.zip but you should not index https://wordpress.org/latest.zip 
 
 ## Documentation
 For more detailed documentation see [Wiki](https://gitlab.com/yaroslaff/hashget/wikis/home).
