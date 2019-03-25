@@ -281,8 +281,8 @@ class HashServer():
         if not self.url.endswith('/'):
             self.url = self.url+'/'
 
-        headers = dict()
-        headers['User-Agent'] = __user_agent__
+        self.headers = dict()
+        self.headers['User-Agent'] = __user_agent__
 
 
         # default config
@@ -292,11 +292,11 @@ class HashServer():
         self.config['motd'] = urllib.parse.urljoin(self.url,'motd.txt')
         self.config['accept_url'] = list()
 
-        r = requests.get(urllib.parse.urljoin(self.url,'config.json'), headers=headers)
+        r = requests.get(urllib.parse.urljoin(self.url,'config.json'), headers=self.headers)
         if r.status_code == 200:
             self.config = {**self.config, **json.loads(r.text)}
 
-        r = requests.get(urllib.parse.urljoin(self.url, self.config['motd']), headers=headers)
+        r = requests.get(urllib.parse.urljoin(self.url, self.config['motd']), headers=self.headers)
         log.info(r.text.rstrip())
 
 
@@ -321,7 +321,7 @@ class HashServer():
         """
 
 
-        r = requests.get(self.fhash2url(hashspec))
+        r = requests.get(self.fhash2url(hashspec), headers=self.headers)
 
         if r.status_code != 200:
             raise KeyError

@@ -80,7 +80,7 @@ def deb2url(root, project, basename):
 #
 
 
-def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None):
+def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, pull=True):
     """
         ANCHORS ??? do we need it here? maybe delete?
     """
@@ -89,8 +89,11 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None):
 
     files = prepare_readfiles(root, anchors, filesz, skip)
 
-    for a in anchors.anchorlist:
-        hashdb.pull_anchor(a.get_hashspec())
+    if pull:
+        for a in anchors.anchorlist:
+            pullanchor = hashdb.pull_anchor(a.get_hashspec())
+            log.debug('pull anchor for {} {}: {}'.format(a.filename, kmgt(a.size), pullanchor))
+
 
     ph2url = dict()  # package hashes to URLs
     rfile = RestoreFile()
@@ -103,7 +106,7 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None):
                     write file info to snf
                 """
                 hashspec = f.get_hashspec()
-                hp = hashdb.hash2hp(hashspec)
+                hp = hashdb.hash2hp(hashspec, remote=False)
 
                 ph2url[hp.get_phash()] = hp.url
 
@@ -120,6 +123,8 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None):
         rfile.save(restorefile)
     log.info("saved: {}".format(rfile))
 
+    log.debug(hashdb)
+
     # guess_packages(root, files)
 
 
@@ -134,7 +139,7 @@ def prepare_readfiles(root, anchors, filesz, skip):
         #    continue
 
         for basename in dirfiles:
-            total += 1        
+            total += 1
             path = os.path.join(directory, basename)                        
 
             if path in skip:
@@ -370,6 +375,8 @@ def main():
     g.add_argument('--file', '-f', default=None, help='filename (for --submit and --pack)')
     g.add_argument('--user', default=False, action='store_true',
                    help='user mode (for --postunpack). do not set owner for files')
+    g.add_argument('--pull', dest='pull', default=False, action='store_true',
+                   help='pull anchors from hashserver (slower)')
     g.add_argument('--recursive', default=False, action='store_true', help='recursive unpacking (slower).')
     g.add_argument('-z', default=False, action='store_true', help='gzip tarred archive')
 
@@ -465,7 +472,8 @@ def main():
                 anchors=anchors,
                 filesz=args.filesz,
                 skip=gl,
-                excludefile=excludefile
+                excludefile=excludefile,
+                pull=args.pull
                 )
 
     if args.postunpack:
@@ -556,7 +564,8 @@ def main():
                 filesz=args.filesz,
                 skip=gl,
                 excludefile=excludefile,
-                restorefile=restorefile
+                restorefile=restorefile,
+                pull=args.pull
                 )
 
         step += 1
