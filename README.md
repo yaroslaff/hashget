@@ -71,12 +71,10 @@ Recovered 8534/8534 files 450.0M bytes (49.9M downloaded, 49.1M cached) in 242.6
 ~~~
 (you can run with -v for verbosity)
 
-Now we have fully working debian system. Some files are still missing (e.g. APT list files) but can be created 
-with 'apt update' command.
+Now we have fully working debian system. Some files are still missing (e.g. APT list files in /var/lib/apt/lists, 
+which we explicitly --exclude'd) but can be created with 'apt update' command.
 
-
-
-## Adding custom files for deduplication
+## Adding (indexing) files to local HashDB
 Now, lets add some files to our test machine:
 
 ~~~
@@ -98,7 +96,7 @@ STEP 3/3 tarring...
 /var/lib/lxc/mydebvm/rootfs/ (1.5G) packed into /tmp/mydebvm.tar.gz (265.0M)
 ~~~
 
-Still very good, but 265M is not as impressive as 4M. Lets fix it!
+Still very good, but 265M is not as impressive as 4M. Lets fix miracle and make it impressive again!
 
 ~~~
 hashget --project my --submit https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.4.tar.xz
@@ -148,15 +146,30 @@ Great! We packed 1.5G into just 8.6Mb!
 Hashget packs this into 8 Mb in 28 seconds (on my Core i5 computer) vs 426Mb in 48 seconds with plain tar -czf. 
 It's two times faster and 53 times more effective on indexed static files.
 
-
 ## What you should NOT index
 You should index ONLY static and permanent files, which will be available on same URL with same content.
 Not all projects provides such files. Usual linux package repositories has only latest files so it's not good for this
 purpose, but debian has great [snapshot.debian.org](https://snapshot.debian.org/) repository, which makes Debian great 
 for hashget compression.
 
-Do not index *latest* files, because content will change later (it's not _static_). E.g. you may index 
+Do not index *latest* files, because content will change    later (it's not _static_). E.g. you may index 
 https://wordpress.org/wordpress-5.1.1.zip but you should not index https://wordpress.org/latest.zip 
+
+## Not only Debian, not only virtual machines
+For now development hashserver has index files (*HashPackages*) for Debian only. But this does not means you can use 
+power of hashget only for debian VMs. In previous example you added linux kernel to local HashDB. You can pack anything
+which has indexed files from HashDB:
+~~~
+# wget -q https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.4.tar.xz
+# tar -xf linux-5.0.4.tar.xz
+# hashget -zf /tmp/mykernel.tar.gz --pack .
+STEP 1/3 Crawling [skipped]...
+STEP 2/3 prepare exclude list for packing...
+saved: 50580 files, 1 pkgs, size: 869.3M
+STEP 3/3 tarring...
+. (875.3M) packed into /tmp/mykernel.tar.gz (4.6M)
+~~~
+
 
 ## Documentation
 For more detailed documentation see [Wiki](https://gitlab.com/yaroslaff/hashget/wikis/home).
