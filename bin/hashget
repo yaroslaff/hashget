@@ -269,7 +269,8 @@ def get_by_hashspec(hashdb, hashspec, outdir):
 
 def debcrawl(hashdb, path, anchors, filesz=10000, sleep=1):
     cnt_total = 0
-    cnt_already = 0
+    cnt_pulled = 0
+    cnt_local = 0
     cnt_new = 0
 
     started = time.time()
@@ -287,10 +288,12 @@ def debcrawl(hashdb, path, anchors, filesz=10000, sleep=1):
 
         if hashdb.sig_present('deb', p.signature, remote=False):
             log.debug('[{}/{}] local {}'.format(cnt_total, np, p.signature))
+            cnt_local += 1
             continue
 
         if hashdb.pull_sig('deb', p.signature):
             log.info('[{}/{}] pulled {} from hashserver'.format(cnt_total, np, p.signature))
+            cnt_pulled += 1
             continue
 
         url = p.url
@@ -318,8 +321,8 @@ def debcrawl(hashdb, path, anchors, filesz=10000, sleep=1):
         log.debug("sleep {}s".format(sleep))
         time.sleep(sleep)
 
-    print("Crawling done in {:.2f}s. {} total, {} new, {} already in db.".format(
-        time.time() - started, cnt_total, cnt_new, cnt_already))
+    print("Crawling done in {:.2f}s. {} local + {} pulled + {} new = {} total.".format(
+        time.time() - started, cnt_local, cnt_pulled, cnt_new, cnt_total))
 
 
 def main():
