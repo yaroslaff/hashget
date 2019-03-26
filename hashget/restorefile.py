@@ -2,21 +2,20 @@ import json
 import os
 from .file import File
 from . import utils
-
+from .singlelist import SingleList
+import time
 
 class RestoreFile(object):
     
     def __init__(self, path=None):
         self.path = path
         self.data = dict()
-        self.data['packages'] = list()
+        self.data['packages'] = list() # list of package dicts (url, hashspec)
         self.data['files'] = list()
-        
+
         if path is not None:
             self.root = os.path.dirname(path)
             self.load(path)
-    
-        pass
 
     def files(self):
         for fdata in self.data['files']:
@@ -32,19 +31,30 @@ class RestoreFile(object):
                 f = File.from_dict(fdata, self.root)
                 yield f
 
-    def packages(self):
+
+    def npackages(self):
+        return len(self.data['packages'])
+
+    def packages_iter(self):
         for pdata in self.data['packages']:
             yield pdata['url']
 
     def add_file(self, f):
-        self.data['files'].append(f.to_dict())
+        """
+        :param f: File
+        :return:
+        """
+
+        fdict = f.to_dict()
+        self.data['files'].append(fdict)
+
 
     def add_package(self, url, hashspec):
         p = dict()
         p['url'] = url
         p['hash'] = hashspec
         self.data['packages'].append(p)
-    
+
     def save(self, path):
         with open(path,'w') as f:
             json.dump(self.data, f, indent=4, sort_keys=True) 
@@ -110,3 +120,4 @@ class RestoreFile(object):
                 nnp += 1
         if nnp > 0:
             print("processed: {}/{} files, missing {} files. Try --recursive option".format(np, len(self.data['files']), nnp))
+

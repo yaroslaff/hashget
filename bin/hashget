@@ -23,6 +23,7 @@ import logging
 import shutil
 import tempfile
 import subprocess
+import json
 
 
 # from requests.packages.urllib3.util.retry import Retry
@@ -37,6 +38,7 @@ import hashget.utils
 import hashget.globlist
 from hashget.debian import DebStatus, debsubmit
 from hashget.restorefile import RestoreFile
+from hashget.singlelist import SingleList
 
 BUF_SIZE = 1024*1024
 
@@ -97,6 +99,7 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, 
 
     ph2url = dict()  # package hashes to URLs
     rfile = RestoreFile()
+    sl = SingleList()
 
     with open(excludefile, 'w') as excf:
         for f in files:
@@ -106,9 +109,11 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, 
                     write file info to snf
                 """
                 hashspec = f.get_hashspec()
-                hp = hashdb.hash2hp(hashspec, remote=False)
+                hplist = hashdb.hash2hp(hashspec, remote=False)
+                sl.add([hp.get_phash() for hp in hplist])
 
-                ph2url[hp.get_phash()] = hp.url
+                for hp in hplist:
+                    ph2url[hp.get_phash()] = hp.url
 
                 excf.write("./{}\n".format(os.path.relpath(f.filename, root)))
                 rfile.add_file(f)
@@ -116,10 +121,10 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, 
             except KeyError:
                 # unique file, not found in any packages
                 pass
-                
-        for hashspec, purl in ph2url.items():
-            rfile.add_package(url=purl, hashspec=hashspec)
-        
+
+        for hashspec in sl.optimized():
+            rfile.add_package(url=ph2url[hashspec], hashspec=hashspec)
+
         rfile.save(restorefile)
     log.info("saved: {}".format(rfile))
 
@@ -173,7 +178,7 @@ def postunpack(root, usermode=False, recursive=False):
 
     rfile = hashget.restorefile.RestoreFile(os.path.join(root, '.hashget-restore'))
     rfile.preiteration()
-    
+
     stat_cached = 0
     stat_downloaded = 0
     stat_recovered = 0
@@ -183,9 +188,13 @@ def postunpack(root, usermode=False, recursive=False):
 
     log.debug('downloading/unpacking packages...')
 
-    for purl in rfile.packages():
+    npackages = 0
 
-        log.debug('restore from URL ' + purl)
+    for purl in rfile.packages_iter():
+
+        npackages += 1
+
+        log.debug('[{}/{}] restore from URL {}'.format(npackages, rfile.npackages(), purl))
         p = hashget.package.Package(url=purl)
         p.recursive = recursive
         p.download()

@@ -246,6 +246,13 @@ class DirHashDB(HashDB):
         for p in self.packages:
             print("  {}".format(p))
 
+
+    def __add_h2hp(self, hashspec, value):
+        if hashspec not in self.__h2hp:
+            self.__h2hp[hashspec]=list()
+
+        self.__h2hp[hashspec].append(value)
+
     # DirHashDB.submit
     def submit(self, hp):
         """
@@ -258,10 +265,10 @@ class DirHashDB(HashDB):
 
         # add sum of package itself, for hash
         for hsum in hp.hashes:
-            self.__h2hp[hsum] = hp
+            self.__add_h2hp(hsum, hp)
 
         for hpf in hp.files:
-            self.__h2hp[hpf] = hp
+            self.__add_h2hp(hpf, hp)
 
         if hp.signatures:
             for sigtype, sig in hp.signatures.items():
@@ -320,14 +327,13 @@ class HashServer():
         :return:
         """
 
-
         r = requests.get(self.fhash2url(hashspec), headers=self.headers)
 
         if r.status_code != 200:
             raise KeyError
 
         hp = HashPackage.load(data = r.json())
-        return(hp)
+        return([hp])
 
     def want_accept(self, url):
         for reurl in self.config['accept_url']:
