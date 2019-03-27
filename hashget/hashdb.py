@@ -261,7 +261,7 @@ class DirHashDB(HashDB):
         """
 
         self.packages.append(hp)
-        phash = hp.get_phash()
+        phash = hp.hashspec
 
         # add sum of package itself, for hash
         for hsum in hp.hashes:
@@ -598,16 +598,21 @@ class HashDBClient(HashDB):
 
     def hash2hp(self, hspec, remote=True):
 
+        r = list()
+
         for hdb in self.hashdb.values():
             try:
-                return hdb.hash2hp(hspec)
+                r.extend(hdb.hash2hp(hspec))
             except KeyError:
                 pass
 
         if remote:
             for hs in self.hashserver:
                 hp = hs.hash2hp(hspec)
-                return hp
+                r.extend(hp)
+
+        if r:
+            return r
 
         raise KeyError("Not found in any of {} hashdb".format(len(self.hashdb)))
 

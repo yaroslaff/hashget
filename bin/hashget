@@ -108,12 +108,12 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, 
                     save url and package hashes, then write to snf
                     write file info to snf
                 """
-                hashspec = f.get_hashspec()
-                hplist = hashdb.hash2hp(hashspec, remote=False)
-                sl.add([hp.get_phash() for hp in hplist])
+                hplist = hashdb.hash2hp(f.hashspec, remote=False)
+
+                sl.add([hp.hashspec for hp in hplist])
 
                 for hp in hplist:
-                    ph2url[hp.get_phash()] = hp.url
+                    ph2url[hp.hashspec] = hp.url
 
                 excf.write("./{}\n".format(os.path.relpath(f.filename, root)))
                 rfile.add_file(f)
@@ -202,11 +202,12 @@ def postunpack(root, usermode=False, recursive=False):
         p.read_files()
         
         for pf in p.all_files():
+
             hashspec = pf.get_hashspec()
 
             if rfile.should_process(hashspec):
                 for rf in rfile.fbyhash(hashspec):
-                    log.debug('recovered {} {}'.format(p.basename, rf.relpath()))
+                    log.debug('recovered {}: {}'.format(p.basename, rf.relpath()))
                     rf.recover(pf.filename, usermode=usermode)
                     rfile.set_processed(hashspec)
                     stat_recovered += rf.size

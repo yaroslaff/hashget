@@ -68,7 +68,16 @@ class HashPackage(object):
     def __repr__(self):
         return "{} ({}/{})".format(self.basename(), len(self.anchors), len(self.files))
 
+
     def get_phash(self):
+        """
+        OBSOLETE method, use get_hashspec for unified
+        :return:
+        """
+        return self.hashspec
+
+    @property
+    def hashspec(self):
         for hspec in self.hashes:
             if hspec.startswith('sha256:'):
                 return hspec

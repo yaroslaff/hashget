@@ -96,9 +96,16 @@ class File():
 
     def __repr__(self):
         return "{} {} {} {}:{}".format(self.filename, self.hashes.md5, kmgt(self.size), self.uid, self.gid)
-    
+
+
+
     def get_hashspec(self):
         return self.hashes.get_hashspec()
+
+    @property
+    def hashspec(self):
+        return self.hashes.get_hashspec()
+
 
     @classmethod
     def from_dict(cls, d, root):
