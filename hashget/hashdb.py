@@ -168,7 +168,7 @@ class DirHashDB(HashDB):
         hsum = hp.get_phash().split(':')[1]
 
         if storage == 'basename':
-            subpath = '/'.join(['p', hp.url.split('/')[-1]])
+            subpath = '/'.join(['p', hp.url.split('/')[-1]]) + '.json'
         elif storage == 'hash2':
             subpath = '/'.join(['p', hsum[0:2], hsum[2:4], hsum[4:]])
         elif storage == 'hash3':
@@ -185,8 +185,19 @@ class DirHashDB(HashDB):
                 path = os.path.join(root, basename)
                 if path != os.path.join(self.path, '.options'):
                     yield path
-
         return list()
+
+    def full_package_files(self):
+        """
+        yields each full path to each package file in DirHashDB
+        """
+        for root, dirs, files in os.walk(os.path.join(self.path,'p')):
+            for basename in files:
+                path = os.path.join(root, basename)
+                if path != os.path.join(self.path, '.options'):
+                    yield os.path.join(self.path, path)
+        return list()
+
 
     def packages_iter(self):
         for subpath in self.package_files():
