@@ -5,7 +5,7 @@ from tempfile import mkdtemp
 import patoolib
 import time
 
-unpack_suffixes = [ '.deb', '.gz', '.xz' ]
+unpack_suffixes = [ '.deb', '.gz', '.xz', '.bz2', '.zip' ]
 
 def sha1sum(filename):
     h  = hashlib.sha1()
@@ -99,6 +99,7 @@ def recursive_unpack(path, udir='/tmp', recursive=True):
         return None
     
     nudir = mkdtemp(prefix='hashget-uniunpack-', dir=udir)
+
     patoolib.extract_archive(path, outdir=nudir, verbosity=-1)
 
     for f in dircontent(nudir):

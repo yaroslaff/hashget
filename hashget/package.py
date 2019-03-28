@@ -5,11 +5,13 @@ from collections import namedtuple
 import os
 import subprocess
 
-
-
 from . import cacheget
 from . import file
 from . import utils
+
+opt_recursive = False
+
+log = logging.getLogger('hashget')
 
 class Package(object):
     """
@@ -25,13 +27,11 @@ class Package(object):
         self.unpacked = None
         self.base_tmpdir = '/tmp'
         self.tmpdir = None
-        self.loghandler = log
-        self.log = log or logging.getLogger('dummy')
         self.hashes = None
         self.basename = None
         self.files = list()
         self.sum_size = 0
-        self.recursive = True
+        self.recursive = opt_recursive
 
         self.stat_downloaded = 0
         self.stat_cached = 0
@@ -54,7 +54,7 @@ class Package(object):
         """
         self.unpack()        
         self.read_files()
-        self.log.debug('look for ' + hashspec)
+        log.debug('look for ' + hashspec)
         for f in self.files:
             if f.hashes.match_hashspec(hashspec):
                 return f.filename
@@ -76,7 +76,7 @@ class Package(object):
             
 
     def unpack(self):                
-        
+
         self.unpacked = utils.recursive_unpack(self.path, recursive=self.recursive)
 
         if self.unpacked:
