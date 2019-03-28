@@ -12,6 +12,8 @@ class RestoreFile(object):
         self.data = dict()
         self.data['packages'] = list() # list of package dicts (url, hashspec)
         self.data['files'] = list()
+        self.data['packagesize'] = 0
+        self.data['packagesize_exact'] = True
 
         if path is not None:
             self.root = os.path.dirname(path)
@@ -49,11 +51,15 @@ class RestoreFile(object):
         self.data['files'].append(fdict)
 
 
-    def add_package(self, url, hashspec):
+    def add_package(self, url, hashspec, size=None):
         p = dict()
         p['url'] = url
         p['hash'] = hashspec
         self.data['packages'].append(p)
+        if size is not None:
+            self.data['packagesize']+= size
+        else:
+            self.data['packagesize_exact'] = False
 
     def save(self, path):
         with open(path,'w') as f:
@@ -100,13 +106,19 @@ class RestoreFile(object):
         return sumsize
             
     def __repr__(self):
-        return '{} files, {} pkgs, size: {}'.format(
+        return '{} files, {} pkgs, size: {}. Download: {}{}'.format(
                 len(self.data['files']),
                 len(self.data['packages']),
-                utils.kmgt(self.sumsize()))
+                utils.kmgt(self.sumsize()),
+                utils.kmgt(self.data['packagesize']),
+                '' if self.data['packagesize_exact'] else '+')
 
     def get_nfiles(self):
         return len(self.data['files'])
+
+    @property
+    def package_size(self):
+        return self.data['packagesize']
 
     def check_processed(self):
         np = 0
