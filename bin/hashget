@@ -39,6 +39,7 @@ import hashget.globlist
 from hashget.debian import DebStatus, debsubmit
 from hashget.restorefile import RestoreFile
 from hashget.singlelist import SingleList
+from hashget.heuristics.base import HeuristicSet
 
 BUF_SIZE = 1024*1024
 
@@ -87,7 +88,7 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, 
         ANCHORS ??? do we need it here? maybe delete?
     """
 
-    restorefile = restorefile or os.path.join(root, '.hashget-restore')
+    restorefile = restorefile or os.path.join(root, '.hashget-restore.json')
 
     files = prepare_readfiles(root, anchors, filesz, skip)
 
@@ -100,6 +101,7 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, 
     ph2url = dict()  # package hashes to URLs
     rfile = RestoreFile()
     sl = SingleList()
+    hpd = dict()
 
     with open(excludefile, 'w') as excf:
         for f in files:
@@ -113,7 +115,7 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, 
                 sl.add([hp.hashspec for hp in hplist])
 
                 for hp in hplist:
-                    ph2url[hp.hashspec] = hp.url
+                    hpd[hp.hashspec] = hp
 
                 excf.write("./{}\n".format(os.path.relpath(f.filename, root)))
                 rfile.add_file(f)
@@ -123,7 +125,8 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, 
                 pass
 
         for hashspec in sl.optimized():
-            rfile.add_package(url=ph2url[hashspec], hashspec=hashspec)
+            hp = hpd[hashspec]
+            rfile.add_package(hp.url, hashspec=hashspec, size = hp.attrs.get('size', None))
 
         rfile.save(restorefile)
     log.info("saved: {}".format(rfile))
@@ -176,7 +179,7 @@ def postunpack(root, usermode=False, recursive=False):
         Restore files after untarring
     """
 
-    rfile = hashget.restorefile.RestoreFile(os.path.join(root, '.hashget-restore'))
+    rfile = hashget.restorefile.RestoreFile(os.path.join(root, '.hashget-restore.json'))
     rfile.preiteration()
 
     stat_cached = 0
@@ -276,8 +279,32 @@ def get_by_hashspec(hashdb, hashspec, outdir):
     p.cleanup() 
     log.info(dst)
 
+def index(hashdb, path, anchors, filesz=10000, heuristics=None):
+    heuristics = heuristics or list(['all'])
 
-def debcrawl(hashdb, path, anchors, filesz=10000, sleep=1):
+    heur = HeuristicSet(heuristics)
+
+    for dir, subdirs, files in os.walk(path):
+        for basename in files:
+            filename = os.path.join(dir, basename)
+            if os.path.islink(filename):
+                continue
+
+            for sr in heur.process(filename):
+                if hashdb.sig_present('url', sr.url, remote=False):
+                    log.debug('local {}'.format(sr.url))
+                else:
+                    log.debug("submitting {}".format(sr.url))
+                    hashget.submiturl.submit_url(
+                        hashdb=hashdb,
+                        url=sr.url,
+                        project=sr.project,
+                        anchors=anchors,
+                        filesz=filesz)
+
+
+
+def deb_index(hashdb, path, anchors, filesz=10000, sleep=1):
     cnt_total = 0
     cnt_pulled = 0
     cnt_local = 0
@@ -308,10 +335,10 @@ def debcrawl(hashdb, path, anchors, filesz=10000, sleep=1):
 
         url = p.url
         if url is None:
-            log.warning('[{}/{}] FAILED to crawl {}'.format(cnt_total, np, p.signature))
+            log.warning('[{}/{}] FAILED to index {}'.format(cnt_total, np, p.signature))
             continue
 
-        log.info("[{}/{}] crawl {}".format(cnt_total, np, p.url))
+        log.info("[{}/{}] index {}".format(cnt_total, np, p.url))
 
         anchors.clean_list()
 
@@ -351,13 +378,14 @@ def main():
     def_sleep = 2
     def_outdir = '.'
     def_target = 'auto'
+    def_heuristics = ['all']
 
     parser = argparse.ArgumentParser(description='HashGet ver {} deduplication and compression tool'.
                                      format(hashget.__version__))
 
     g = parser.add_argument_group('Packing/unpacking')
     g.add_argument('--pack', default=None, metavar='DIR',
-                   help='Make .tar.gz of dir into -f file (set of --debcrawl, --prepack and then tar -czf .. -X)')
+                   help='Make .tar.gz of dir into -f file (set of --debindex, --prepack and then tar -czf .. -X)')
     g.add_argument('--prepack', '-p', default=None, metavar='DIR', help='prepare DIR for hash-tarring')
     g.add_argument('--postunpack', '-u', default=None, metavar='DIR', help='post-unpack')
 
@@ -367,7 +395,8 @@ def main():
 
     g = parser.add_argument_group('Local HashDB commands')
     g.add_argument('--submit', default=None, metavar='URL', help='submit URL to --project')
-    g.add_argument('--debcrawl', default=None, metavar='DIR', help='snapshot crawl packages in DIR')
+    g.add_argument('--index', default=None, metavar='DIR', help='index files in DIR')
+    g.add_argument('--debindex', default=None, metavar='DIR', help='index packages from root fs in DIR')
     g.add_argument('--debsubmit', default=None, metavar='package.deb', help='submit local .deb file')
 
     g = parser.add_argument_group('Crawling options')
@@ -377,6 +406,8 @@ def main():
     g.add_argument('--sleep', type=int, default=def_sleep, help='delay ({}s)'.format(def_sleep))
     g.add_argument('--fanchor', nargs='+', metavar='FILEGLOB', default=list(),
                    help='forced anchor glob, e.g. --fanchor ".*Makefile" etc/passwd')
+    g.add_argument('--heuristics', nargs='*', metavar='HEURISTIC NAME', default=def_heuristics,
+                   help='list of heuristics')
 
     g = parser.add_argument_group('Other options')
     g.add_argument('--hashserver', nargs='*', default=def_hashserver, help='hashserver URL ({})'.format(def_hashserver))
@@ -462,10 +493,15 @@ def main():
         print("import repo {} {} from args".format(rname, repo[rname]))
     """
 
-    if args.debcrawl:
-        debcrawl(hashdb=hashdb, path=args.debcrawl, anchors=anchors, filesz=args.filesz)
+    # Options
+    hashget.package.opt_recursive = args.recursive
+
+    if args.index:
+        index(hashdb=hashdb, path=args.index, anchors=anchors, filesz=args.filesz, heuristics=args.heuristics)
 
 
+    if args.debindex:
+        deb_index(hashdb=hashdb, path=args.debindex, anchors=anchors, filesz=args.filesz)
 
     if args.prepack:
 
@@ -558,10 +594,12 @@ def main():
         #
 
         if target == 'debian':
-            log.info("STEP {}/{} Crawling...".format(step, nsteps))
-            debcrawl(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz)
+            log.info("STEP {}/{} Indexing debian packages...".format(step, nsteps))
+            deb_index(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz)
+            index(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz)
         else:
-            log.info("STEP {}/{} Crawling [skipped]...".format(step, nsteps))
+            log.info("STEP {}/{} Indexing...".format(step, nsteps))
+            index(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz)
         step += 1
 
 
@@ -569,7 +607,7 @@ def main():
 
         tmpdir = tempfile.mkdtemp(prefix='hashget-pack-')
         excludefile = os.path.join(tmpdir, '.hashget-exclude')
-        restorefile = os.path.join(tmpdir, '.hashget-restore')
+        restorefile = os.path.join(tmpdir, '.hashget-restore.json')
 
         prepare(path,
                 hashdb=hashdb,
@@ -599,8 +637,7 @@ def main():
             cmd.extend(['--exclude', exc_path])
 
         cmd.extend(['-C', path, '.'])
-        cmd.extend(['-C', tmpdir, '.hashget-restore'])
-
+        cmd.extend(['-C', tmpdir, '.hashget-restore.json'])
 
         log.debug('Run: {}'.format(cmd))
 

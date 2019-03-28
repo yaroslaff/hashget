@@ -129,3 +129,4 @@ class HashPackage(object):
                         os.unlink(path)
 
         os.unlink(self.path)
+
