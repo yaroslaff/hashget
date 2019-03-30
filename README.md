@@ -32,12 +32,12 @@ git clone https://gitlab.com/yaroslaff/hashget.git
 Compressing [test machine](https://gitlab.com/yaroslaff/hashget/wikis/Test-machine): 
 
 ~~~
-# hashget -zf /tmp/mydebvm.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ --exclude var/cache/apt var/lib/apt/lists 
-STEP 1/3 Crawling...
+# hashget -zf /tmp/mydebvm.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ --exclude var/cache/apt var/lib/apt/lists
+STEP 1/3 Indexing debian packages...
 Total: 222 packages
-Crawling done in 0.01s. 222 total, 0 new, 0 already in db.
+Crawling done in 0.02s. 222 local + 0 pulled + 0 new = 222 total.
 STEP 2/3 prepare exclude list for packing...
-saved: 8515 files, 219 pkgs, size: 445.8M
+saved: 8515 files, 216 pkgs, size: 445.8M. Download: 98.7M
 STEP 3/3 tarring...
 /var/lib/lxc/mydebvm/rootfs/ (687.2M) packed into /tmp/mydebvm.tar.gz (4.0M)
 ~~~
@@ -50,8 +50,8 @@ Now lets compare results with usual tarring
 # tar -czf /tmp/mydebvm-orig.tar.gz  --exclude=var/cache/apt --exclude=var/lib/apt/lists -C /var/lib/lxc/mydebvm/rootfs/ .
 
 # ls -lh mydebvm*
--rw-r--r-- 1 root root 165M мар 25 19:58 mydebvm-orig.tar.gz
--rw-r--r-- 1 root root 4,1M мар 25 19:54 mydebvm.tar.gz
+-rw-r--r-- 1 root root 165M Mar 29 00:27 mydebvm-orig.tar.gz
+-rw-r--r-- 1 root root 4.1M Mar 29 00:24 mydebvm.tar.gz
 ~~~
 Optimized backup is 40 times smaller!
 
@@ -59,6 +59,7 @@ Optimized backup is 40 times smaller!
 
 Untarring:
 ~~~
+# mkdir rootfs
 # tar -xzf mydebvm.tar.gz -C rootfs
 # du -sh --apparent-size rootfs/
 130M	rootfs/

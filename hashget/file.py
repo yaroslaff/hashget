@@ -130,7 +130,11 @@ class File():
         return f
     
     def recover(self, path, usermode=False):
-        shutil.copyfile(path, self.filename)
+
+
+        filename = os.fsdecode(self.filename)
+
+        shutil.copyfile(path, filename)
         os.chmod(self.filename, self.mode)
         os.utime(self.filename, (self.atime, self.mtime))
 

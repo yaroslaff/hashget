@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import hashlib
+import argparse
+import hashget
+
+def md5(fname):
+    hash_md5 = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+def mysort(path, iter):
+
+    dirs = list()
+    files = list()
+
+    for i in iter:
+        # print(".. {}".format(i))
+        fullpath = os.path.join(path, i)
+        if os.path.isdir(fullpath):
+            dirs.append(i)
+        else:
+            files.append(i)
+
+    return sorted(dirs) + sorted(files)
+
+def do_path(path, root=None):
+    root = root or path
+    prelpath = os.path.relpath(path, root)
+    fullpath = os.path.realpath(os.path.join(root, path))
+
+    #print("do_path {} ({})".format(path, root))
+
+    if os.path.isdir(path):
+        print("D {}".format(prelpath))
+        for sub in mysort(path, os.listdir(path)):
+            rpath = os.path.join(prelpath, sub)
+            # print("rpath: {} {}".format(rpath, root))
+            do_path(os.path.join(root, rpath), root)
+    else:
+        st = os.stat(fullpath)
+        info = "F {} size: {} owner: {} group {} perm: {:o} md5: {}".format(
+            prelpath,
+            st.st_size,
+            st.st_uid,
+            st.st_gid,
+            st.st_mode & 0o777,
+            md5(fullpath))
+        print(info)
+
+parser = argparse.ArgumentParser(
+    description='HashGet ver {} deduplication and compression tool'.format(hashget.__version__))
+
+parser.add_argument('path', default=None, metavar='PATH', help='PATH to file or directory')
+
+args = parser.parse_args()
+
+do_path(args.path)
+
+

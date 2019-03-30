@@ -103,7 +103,7 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, 
     sl = SingleList()
     hpd = dict()
 
-    with open(excludefile, 'w') as excf:
+    with open(excludefile, 'wb') as excf:
         for f in files:
             try:
                 """
@@ -117,7 +117,13 @@ def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, 
                 for hp in hplist:
                     hpd[hp.hashspec] = hp
 
-                excf.write("./{}\n".format(os.path.relpath(f.filename, root)))
+
+
+
+                relpath = os.path.relpath(f.filename, root)
+                line = os.fsencode(u"./{}\n".format(os.path.relpath(f.filename, root)))
+                #excf.write(line)
+                excf.write(os.fsencode("./{}\n".format(os.path.relpath(f.filename, root))))
                 rfile.add_file(f)
 
             except KeyError:
