@@ -300,7 +300,7 @@ def index(hashdb, path, anchors, filesz=10000, heuristics=None):
                 if hashdb.sig_present('url', sr.url, remote=False):
                     log.debug('local {}'.format(sr.url))
                 else:
-                    log.debug("submitting {}".format(sr.url))
+                    log.info("submitting {}".format(sr.url))
                     hashget.submiturl.submit_url(
                         hashdb=hashdb,
                         url=sr.url,
@@ -364,7 +364,7 @@ def deb_index(hashdb, path, anchors, filesz=10000, sleep=1):
         log.debug("sleep {}s".format(sleep))
         time.sleep(sleep)
 
-    print("Crawling done in {:.2f}s. {} local + {} pulled + {} new = {} total.".format(
+    print("Indexing done in {:.2f}s. {} local + {} pulled + {} new = {} total.".format(
         time.time() - started, cnt_local, cnt_pulled, cnt_new, cnt_total))
 
 
