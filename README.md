@@ -1,12 +1,15 @@
 # hashget
 
-Network deduplication tool for archiving (backup) debian virtual machines (mostly). For example, very useful for backup LXC containers 
+*You do not need to bear the cost to store files which you can download*
+
+Hashget is network deduplication tool developed mainly for archiving (backup) debian virtual machines (mostly), but 
+could be used for other backups too. For example, it's very useful for backup LXC containers 
 before uploading to Amazon Glacier. 
 
-When compressing, hashget replaces *indexed static files* (which could be downloaded by static URL) 
+Upon compressing, hashget replaces *indexed static files* (which could be downloaded by static URL) 
 to it's hashes and URLs. This can compress 600Mb debian root filesystem with mysql, apache and other software to just 4Mb !
 
-When decompressing, hashget downloads these files, verifies hashsum and places it on target system with same 
+Upon decompressing, hashget downloads these files, verifies hashsum and places it on target system with same 
 permissions, ownership, atime and mtime.
 
 Hashget archive (in contrast to incremental and differential archive) is 'self-sufficient in same world' 
