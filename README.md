@@ -124,7 +124,7 @@ linux-5.0.5.tar.xz (767/50579)
 ~~~
 
 Even when new kernel package will be released (and it's not indexed anywhere), hashget will detect it and 
-automatically index (at least until new linux kernels will match same 'template' as it matches now for kernels 
+automatically index (at least while new linux kernels will match same 'template' as it matches now for kernels 
 1.0 to 5.0.5).
 
 ## Manually indexing files to local HashDB
