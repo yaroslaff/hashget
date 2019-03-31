@@ -194,7 +194,8 @@ And one important thing - hashget archiving keeps all your changes! If you will 
 # echo zzz >> wordpress/index.php
 ~~~
 and --pack it, it will be just little bigger (158K for me instead of 157.9) but will keep your changed file as-is.
-This file has different hashsum, so it will not be recovered from wordpress archive.
+This file has different hashsum, so it will be .tar.gz'ipped and not recovered from wordpress archive as other 
+wordpress files.
 
 # Hint files
 If our package is indexed (like we just did with wordpress) it will be very effectively deduplicated on packing.
