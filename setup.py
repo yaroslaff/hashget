@@ -26,7 +26,7 @@ def read(fname):
 setup(
     name='hashget',
     version=vermod.__version__,
-    packages=['hashget'],
+    packages=['hashget', 'hashget.heuristics'],
     scripts=['bin/hashget', 'bin/hashget-admin'],
 
     install_requires=['patool','filetype','filelock','setuptools', 'requests'],

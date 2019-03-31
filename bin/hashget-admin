@@ -286,7 +286,7 @@ def main():
         for name, hdb in hashdb.hashdb.items():
             if name == args.project or not args.project:
                 print(name)
-                for p in hdb.packages:
+                for p in hdb.packages_iter():
                     print(p)
                     p.make_anchors(webroot)
 
