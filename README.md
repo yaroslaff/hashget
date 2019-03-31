@@ -90,7 +90,7 @@ mydebvm# du -sh --apparent-size .
 893M	.
 ~~~
 
-If we will pack this machine same was as before we will see this:
+If we will pack this machine same way as before we will see this:
 ~~~
 # hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ --exclude var/cache/apt var/lib/apt/lists
 STEP 1/3 Indexing debian packages...
