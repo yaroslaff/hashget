@@ -186,7 +186,15 @@ my DirHashDB(path:/var/cache/hashget/hashdb/my stor:basename pkgtype:generic pac
   bad anchor link: 0
 
 ~~~
-It takes just 100K on disk, has 1 package indexed (11.7M), over 1395 total files. 
+It takes just 100K on disk, has 1 package indexed (11.7M), over 1395 total files. You can clean HashDB, but usually 
+it's not needed, because HashDB is very small (and saves lot of space). 
+
+And one important thing - hashget archiving keeps all your changes! If you will make any changes in data, e.g.:
+~~~
+# echo zzz >> wordpress/index.php
+~~~
+and --pack it, it will be just little bigger (158K for me instead of 157.9) but will keep your changed file as-is.
+This file has different hashsum, so it will not be recovered from wordpress archive.
 
 # Hint files
 If our package is indexed (like we just did with wordpress) it will be very effectively deduplicated on packing.
@@ -229,22 +237,6 @@ for hashget compression.
 
 Do not index *latest* files, because content will change    later (it's not _static_). E.g. you may index 
 https://wordpress.org/wordpress-5.1.1.zip but you should not index https://wordpress.org/latest.zip 
-
-## Not only Debian, not only virtual machines
-For now development hashserver has index files (*HashPackages*) for Debian only. But this does not means you can use 
-power of hashget only for debian VMs. In previous example you added linux kernel to local HashDB. You can pack anything
-which has indexed files from HashDB:
-~~~
-# wget -q https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.4.tar.xz
-# tar -xf linux-5.0.4.tar.xz
-# hashget -zf /tmp/mykernel.tar.gz --pack .
-STEP 1/3 Crawling [skipped]...
-STEP 2/3 prepare exclude list for packing...
-saved: 50580 files, 1 pkgs, size: 869.3M
-STEP 3/3 tarring...
-. (875.3M) packed into /tmp/mykernel.tar.gz (4.6M)
-~~~
-
 
 ## Documentation
 For more detailed documentation see [Wiki](https://gitlab.com/yaroslaff/hashget/wikis/home).
