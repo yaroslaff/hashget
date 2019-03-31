@@ -42,7 +42,7 @@ STEP 3/3 tarring...
 /var/lib/lxc/mydebvm/rootfs/ (687.2M) packed into /tmp/mydebian.tar.gz (4.0M)
 ~~~
 
---exclude directive tells hashget and tar to skip some directories which are not necessary in backup. 
+`--exclude` directive tells hashget and tar to skip some directories which are not necessary in backup. 
 (You can omit it, backup will be larger)
 
 Now lets compare results with usual tarring
