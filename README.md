@@ -92,7 +92,7 @@ mydebvm# du -sh --apparent-size .
 
 If we will pack this machine same was as before we will see this:
 ~~~
-root@braconnier:~# hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ --exclude var/cache/apt var/lib/apt/lists
+# hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ --exclude var/cache/apt var/lib/apt/lists
 STEP 1/3 Indexing debian packages...
 Total: 222 packages
 Indexing done in 0.03s. 222 local + 0 pulled + 0 new = 222 total.
@@ -103,7 +103,7 @@ STEP 3/3 tarring...
 /var/lib/lxc/mydebvm/rootfs/ (1.5G) packed into /tmp/mydebian.tar.gz (8.7M)
 ~~~
 
-You see one more interesting line here:
+One very interesting line here is:
 ~~~
 submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.5.tar.xz
 ~~~
@@ -123,9 +123,9 @@ show content of project:
 linux-5.0.5.tar.xz (767/50579)
 ~~~
 
-Even if when kernel package will be released (and it's not indexed anywhere), hashget will detect it and automatically 
-index.
-
+Even when new kernel package will be released (and it's not indexed anywhere), hashget will detect it and 
+automatically index (at least until new linux kernels will match same 'template' as it matches now for kernels 
+1.0 to 5.0.5).
 
 ## Manually indexing files to local HashDB
 Now lets make test directory for packing.
