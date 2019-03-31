@@ -169,7 +169,7 @@ STEP 3/3 tarring...
 
 We can look our project details:
 ~~~
-root@braconnier:/tmp/test# hashget-admin --status -p my
+# hashget-admin --status -p my
 my DirHashDB(path:/var/cache/hashget/hashdb/my stor:basename pkgtype:generic packages:0)
   size: 119.4K
   packages: 1
@@ -187,7 +187,7 @@ my DirHashDB(path:/var/cache/hashget/hashdb/my stor:basename pkgtype:generic pac
 
 ~~~
 It takes just 100K on disk, has 1 package indexed (11.7M), over 1395 total files. You can clean HashDB, but usually 
-it's not needed, because HashDB is very small (and saves lot of space). 
+it's not needed, because HashDB is very small. 
 
 And one important thing - hashget archiving keeps all your changes! If you will make any changes in data, e.g.:
 ~~~
@@ -198,7 +198,7 @@ This file has different hashsum, so it will not be recovered from wordpress arch
 
 # Hint files
 If our package is indexed (like we just did with wordpress) it will be very effectively deduplicated on packing.
-But what if it's not indexed? For example, if you cleaned hashdb cache or if you will recover this backup on other 
+But what if it's not indexed? For example, if you cleaned hashdb cache or if you will restored this backup on other 
 machine and pack it again. It will take it's full space again. 
 
 We will delete index for this file:
