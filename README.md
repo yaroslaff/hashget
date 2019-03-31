@@ -206,7 +206,7 @@ We will delete index for this file:
 ~~~
 # hashget-admin --purge wordpress-5.1.1-ru_RU.zip
 ~~~
-Now, if you will make hashget --pack it it will take huge 50M again, our magic is lost...
+Now, if you will make hashget --pack it it will make huge 22M archive again, our magic is lost...
 
 Now, create special *hint* file hashget-hint.json (or .hashget-hint.json , 
 if you want it to be hidden) in /tmp/test with this content:
