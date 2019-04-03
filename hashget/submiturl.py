@@ -2,10 +2,11 @@ import datetime
 # from .hashpackage import HashPackage
 from .package import Package
 import logging
+import hashget.anchor
 
 log = logging.getLogger('hashget')
 
-def submit_url(url, project, anchors, filesz=1024, hashdb=None, file=None, signatures=None, pkgtype=None, attrs=None):
+def submit_url(url, project, anchors=None, filesz=1024, hashdb=None, file=None, signatures=None, pkgtype=None, attrs=None):
     """
     function interface
 
@@ -19,6 +20,8 @@ def submit_url(url, project, anchors, filesz=1024, hashdb=None, file=None, signa
     :param attrs: addtional attributes such as size, date of hashing etc.
     :return:
     """
+
+    anchors = anchors or hashget.anchor.AnchorList()
 
     hdb = hashdb.ensure_project(project, pkgtype=pkgtype)
 

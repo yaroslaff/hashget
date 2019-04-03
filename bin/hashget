@@ -34,10 +34,10 @@ from hashget.submiturl import submit_url
 from hashget.utils import kmgt
 import hashget.utils
 import hashget.globlist
-from hashget.debian import DebStatus, debsubmit
 from hashget.restorefile import RestoreFile
 from hashget.singlelist import SingleList
 from hashget.heuristic_base import HeuristicSet
+from hashget.debian import debsubmit
 
 BUF_SIZE = 1024*1024
 
@@ -286,7 +286,14 @@ def get_by_hashspec(hashdb, hashspec, outdir):
 def index(hashdb, path, anchors, filesz=10000, heuristics=None):
     heuristics = heuristics or list(['all'])
 
-    heur = HeuristicSet(heuristics)
+    heur = HeuristicSet(hashdb=hashdb, heuristics=heuristics)
+
+    total = 0
+    local = 0
+    pulled = 0
+    new = 0
+
+    started = time.time()
 
     for dir, subdirs, files in os.walk(path):
         for basename in files:
@@ -295,76 +302,26 @@ def index(hashdb, path, anchors, filesz=10000, heuristics=None):
                 continue
 
             for sr in heur.process(filename):
-                if hashdb.sig_present('url', sr.url, remote=False):
-                    log.debug('local {}'.format(sr.url))
-                else:
-                    log.info("submitting {}".format(sr.url))
-                    hashget.submiturl.submit_url(
-                        hashdb=hashdb,
-                        url=sr.url,
-                        project=sr.project,
-                        anchors=anchors,
-                        filesz=filesz)
+                total += 1
 
+                # print(sr)
+                if sr.sig_present():
+                    log.debug("local {}".format(sr.first_sig()[1]))
+                    local += 1
+                    continue
 
+                if sr.pull_sig():
+                    log.info("pulled {}".format(sr.first_sig()[1]))
+                    pulled += 1
+                    continue
 
-def deb_index(hashdb, path, anchors, filesz=10000, sleep=1):
-    cnt_total = 0
-    cnt_pulled = 0
-    cnt_local = 0
-    cnt_new = 0
+                log.info("submitting {}".format(sr.url))
+                sr.submit()
+                new += 1
 
-    started = time.time()
-
-    # ensure debsnap project exists
-    hashdb.create_project('debsnap')
-
-    debstatus = DebStatus(path)
-    np = debstatus.n_installed
-    print("Total: {} packages".format(np))
-
-    for p in debstatus.packages_iter():
-
-        cnt_total += 1
-
-        if hashdb.sig_present('deb', p.signature, remote=False):
-            log.debug('[{}/{}] local {}'.format(cnt_total, np, p.signature))
-            cnt_local += 1
-            continue
-
-        if hashdb.pull_sig('deb', p.signature):
-            log.info('[{}/{}] pulled {} from hashserver'.format(cnt_total, np, p.signature))
-            cnt_pulled += 1
-            continue
-
-        url = p.url
-        if url is None:
-            log.warning('[{}/{}] FAILED to index {}'.format(cnt_total, np, p.signature))
-            continue
-
-        log.info("[{}/{}] index {}".format(cnt_total, np, p.url))
-
-        anchors.clean_list()
-
-        signatures = {
-            'deb': p.signature
-        }
-
-        submit_url(
-            url=p.url,
-            hashdb=hashdb,
-            project='debsnap',
-            anchors=anchors,
-            filesz=filesz,
-            signatures=signatures)
-
-        cnt_new += 1
-        log.debug("sleep {}s".format(sleep))
-        time.sleep(sleep)
-
-    print("Indexing done in {:.2f}s. {} local + {} pulled + {} new = {} total.".format(
-        time.time() - started, cnt_local, cnt_pulled, cnt_new, cnt_total))
-
+    log.info('Indexing done in {:.2f}s. {} local + {} pulled + {} new = {} total packages'.format(
+        time.time() - started,
+        local, pulled, new, total))
 
 def main():
 
@@ -430,8 +387,8 @@ def main():
 
 
     g = parser.add_argument_group('Target system specification')
-    g.add_argument('--target', '-t', default=def_target,
-                   help='Target specification (files/debian/auto) ({})'.format(def_target))
+    #g.add_argument('--target', '-t', default=def_target,
+    #               help='Target specification (files/debian/auto) ({})'.format(def_target))
     g.add_argument('--exclude', nargs='+', metavar='PATH', default=def_exclude_dirs,
                    help='Do not include anything under PATH. Relative to --prepare/--pack')
     #g.add_argument('--exclude-file', nargs='+', metavar='PATH', default=def_exclude_files,
@@ -453,7 +410,29 @@ def main():
         print('HashGet version {}'.format(hashget.__version__))
         sys.exit(0)
 
+
+    # configure logging
+    if args.verbose:
+        loglevel = logging.DEBUG
+    else:
+        loglevel = logging.INFO
+    if args.quiet:
+        loglevel = logging.ERROR
+    log = logging.getLogger('hashget')
+    log.setLevel(loglevel)
+    logstdout = logging.StreamHandler(stream=sys.stderr)
+    logstdout.setFormatter(logging.Formatter('%(message)s', '%Y-%m-%d %H:%M:%S'))
+    log.addHandler(logstdout)
+    if args.logfile:
+        fh = logging.FileHandler(args.logfile)
+        fh.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+        log.addHandler(fh)
+
+
+
+    log.debug('Loading hashdb')
     hashdb = hashget.hashdb.HashDBClient(args.hashdb)
+
     anchors = hashget.AnchorList(args.anchsz)
     for fa in args.fanchor:
         anchors.add_fanchor(fa)
@@ -461,51 +440,13 @@ def main():
     for url in args.hashserver:
         hashdb.add_hashserver(url)
 
-    # configure logging
-    if args.verbose:
-        loglevel = logging.DEBUG
-
-    else:
-        loglevel = logging.INFO
-
-    if args.quiet:
-        loglevel = logging.ERROR
-
     hashget.cacheget.opt_verify_etag = args.etag
-
-    log = logging.getLogger('hashget')
-    log.setLevel(loglevel)
-
-    logstdout = logging.StreamHandler(stream=sys.stderr)
-    logstdout.setFormatter(logging.Formatter('%(message)s', '%Y-%m-%d %H:%M:%S'))
-    log.addHandler(logstdout)
-
-    if args.logfile:
-        fh = logging.FileHandler(args.logfile)
-        fh.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-        log.addHandler(fh)
-
-    """
-    for e in os.environ:        
-        if e.startswith("REPO_"):
-            rname = e[len("REPO_"):]
-            repo[rname] = os.environ[e]
-            print("import repo {} {} from env".format(rname, repo[rname]))
-
-    for r in args.repo:
-        repo[r[0]]=r[1]
-        print("import repo {} {} from args".format(rname, repo[rname]))
-    """
 
     # Options
     hashget.package.opt_recursive = args.recursive
 
     if args.index:
         index(hashdb=hashdb, path=args.index, anchors=anchors, filesz=args.filesz, heuristics=args.heuristics)
-
-
-    if args.debindex:
-        deb_index(hashdb=hashdb, path=args.debindex, anchors=anchors, filesz=args.filesz)
 
     if args.prepack:
 
@@ -582,30 +523,14 @@ def main():
         for skip in args.skip + args.exclude:
             gl.add_relpath(skip)
 
-        if args.target == 'auto':
-            statusfile = os.path.join(path, 'var/lib/dpkg/status')
-            if(os.path.isfile(statusfile)):
-                target = 'debian'
-            else:
-                target = 'files'
-        else:
-            target = args.target
-        log.debug("target type: {}".format(target))
-
 
         #
         # STEP 1
         #
 
-        if target == 'debian':
-            log.info("STEP {}/{} Indexing debian packages...".format(step, nsteps))
-            deb_index(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz)
-            index(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz)
-        else:
-            log.info("STEP {}/{} Indexing...".format(step, nsteps))
-            index(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz)
+        log.info("STEP {}/{} Indexing...".format(step, nsteps))
+        index(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz)
         step += 1
-
 
         log.info('STEP {}/{} prepare exclude list for packing...'.format(step, nsteps))
 

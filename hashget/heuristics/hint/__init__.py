@@ -6,8 +6,8 @@ from hashget.heuristic_base import BaseHeuristic, SubmitRequest
 class HintHeuristic(BaseHeuristic):
     codename = 'hint'
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, hashdb=None):
+        super().__init__(hashdb=hashdb)
         self.basenames = ['hashget-hint.json', '.hashget-hint.json']
         self.def_project = '_hints'
 
@@ -24,7 +24,7 @@ class HintHeuristic(BaseHeuristic):
         project = hint.get('project', self.def_project)
 
         if 'url' in hint:
-            sr = SubmitRequest(url=hint['url'], project=project)
+            sr = SubmitRequest(hashdb=self.hashdb, url=hint['url'], project=project)
             return [sr]
 
         return list()

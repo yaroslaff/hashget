@@ -65,6 +65,13 @@ class DebPackage(object):
         self.__url = self.get_snapshot_url()
         return self.__url
 
+    def get_url(self):
+        """
+            undecorated get_url for passing as method
+        :return:
+        """
+        return self.url
+
     def get_snapshot_url(self):
         prefix = 'http://snapshot.debian.org/mr/'
         aurl_prefix = 'http://snapshot.debian.org/archive'    

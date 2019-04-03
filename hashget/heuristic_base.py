@@ -6,13 +6,71 @@ import hashget.heuristics
 log = logging.getLogger('hashget')
 
 class SubmitRequest():
-    def __init__(self, url, project):
-        self.url = url
-        self.project = project
+    def __init__(self, hashdb=None, url=None, urlmethod=None, signatures=None, project=None):
+        self.hashdb = hashdb
+        self._url = url
+        self._urlmethod = urlmethod
+        self.signatures = signatures or dict()
+        self.project = project or '_submitted'
+
+
+    def first_sig(self):
+        """
+        return any sig tuple (but not url if possible)
+        :return:
+        """
+
+        sigkeys = list(self.signatures.keys())
+        try:
+            sigkeys.remove('url')
+        except ValueError:
+            pass
+
+        if sigkeys:
+            return (sigkeys[0], self.signatures[sigkeys[0]])
+        else:
+            return ('url', self.url)
+
+
+    def sig_present(self, remote=False):
+        for sigtype, signature in self.signatures.items():
+            if self.hashdb.sig_present(sigtype, signature, remote=remote):
+                return True
+
+        # process 'url' signature if missing in signatures
+        if not 'url' in self.signatures:
+            return self.hashdb.sig_present('url', self.url)
+
+        return False
+
+    def submit(self):
+        hashget.submiturl.submit_url(
+            hashdb=self.hashdb,
+            url=self.url,
+            project=self.project,
+            signatures = self.signatures,
+            )
+
+    def pull_sig(self):
+        sigtype, signature = self.first_sig()
+        return self.hashdb.pull_sig(sigtype, signature)
+
+
+    def __repr__(self):
+        return "SR {}".format(self.url)
+
+    @property
+    def url(self):
+        if self._url:
+            return self._url
+
+        if self._urlmethod:
+            return self._urlmethod()
 
 class BaseHeuristic():
 
-    def __init__(self):
+    def __init__(self, hashdb=None):
+        self.hashdb = hashdb
         pass
 
     def check(self, path):
@@ -20,7 +78,7 @@ class BaseHeuristic():
 
 class HeuristicSet():
 
-    def __init__(self, heuristics):
+    def __init__(self, hashdb, heuristics):
 
         self._heuristics = list()
 
@@ -34,8 +92,7 @@ class HeuristicSet():
             for cls in mod.heuristics:
                 if 'all' in heuristics or cls.codename in heuristics:
                     log.debug("import heuristic {} from {}".format(cls.codename, name))
-                    self._heuristics.append(cls())
-
+                    self._heuristics.append(cls(hashdb=hashdb))
 
     def process(self, path):
         r = list()
