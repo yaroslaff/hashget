@@ -85,60 +85,8 @@ which we **explicitly** --exclude'd. Hashget didn't misses anything on it's own)
 
 ## Advanced
 
-### Heuristics
-Heuristics are small plugins (installed when you did `pip3 install hashget[plugins]`, or can be installed separately)
-which can auto-detect some non-indexed files which could be indexed.
-
-Now, lets add some files to our test machine:
-~~~
-mydebvm# wget -q https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.4.tar.xz
-mydebvm# tar -xf linux-5.0.4.tar.xz 
-mydebvm# du -sh --apparent-size .
-893M	.
-~~~
-
-If we will pack this machine same way as before we will see this:
-~~~
-# hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ --exclude var/cache/apt var/lib/apt/lists
-STEP 1/3 Indexing debian packages...
-Total: 222 packages
-Indexing done in 0.03s. 222 local + 0 pulled + 0 new = 222 total.
-submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.5.tar.xz
-STEP 2/3 prepare exclude list for packing...
-saved: 59095 files, 217 pkgs, size: 1.3G. Download: 199.1M
-STEP 3/3 tarring...
-/var/lib/lxc/mydebvm/rootfs/ (1.5G) packed into /tmp/mydebian.tar.gz (8.7M)
-~~~
-
-One very interesting line here is:
-~~~
-submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.5.tar.xz
-~~~
-
-Hashget detected linux kernel sources package, downloaded and indexed it. And we got fantastic result again: 1.5G 
-packed into just 8.7M!
-
-Hashget packs this into 8 Mb in 28 seconds (on my Core i5 computer) vs 426Mb in 48 seconds with plain tar -czf. 
-(And 3 minutes with hashget/tar/gz vs 4 minutes with tar on slower notebook). Hashget packs faster and often 
-much more effective.
-
-
-If you will make `hashget-admin --status` you will see kernel.org project. `hashget-admin --list -p PROJECT` will 
-show content of project:
-~~~
-# hashget-admin --list -p kernel.org
-linux-5.0.5.tar.xz (767/50579)
-~~~
-
-Even when new kernel package will be released (and it's not indexed anywhere), hashget will detect it and 
-automatically index (at least while new linux kernels will match same 'template' as it matches now for kernels 
-1.0 to 5.0.5).
-
-Users and developers of large packages can write their own hashget plugins using [Linux kernel hashget plugin](https://gitlab.com/yaroslaff/hashget-kernel_org/)
-as example.
-
 ### Manually indexing files to local HashDB
-Now lets make test directory with wordpress for packing.
+Lets make test directory with wordpress for packing.
 
 ~~~
 # mkdir /tmp/test
@@ -167,6 +115,7 @@ STEP 3/3 tarring...
 Thats same result as usual tar would do. Only ~100K saved (you can see it in .hashget-restore.json file, there are
 usual license files). Still ok, but not as impressive as before. Lets fix miracle and make it impressive again!
 
+We will index this WordPress version, and it will be compressed very effectively.
 ~~~
 # hashget --project my --submit https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
 # hashget -zf /tmp/test.tar.gz --pack /tmp/test/
@@ -205,8 +154,10 @@ And one important thing - hashget archiving keeps all your changes! If you will 
 # echo zzz >> wordpress/index.php
 ~~~
 and --pack it, it will be just little bigger (158K for me instead of 157.9) but will keep your changed file as-is.
-This file has different hashsum, so it will be .tar.gz'ipped and not recovered from wordpress archive as other 
+Modified file has other hashsum, so it will be .tar.gz'ipped and not recovered from wordpress archive as other 
 wordpress files.
+
+> Manual indexing is easy way to optimize packing of particular large packages.
 
 ### Hint files
 If our package is indexed (like we just did with wordpress) it will be very effectively deduplicated on packing.
@@ -217,7 +168,9 @@ We will delete index for this file:
 ~~~
 # hashget-admin --purge wordpress-5.1.1-ru_RU.zip
 ~~~
-Now, if you will make hashget --pack it it will make huge 22M archive again, our magic is lost...
+(you can get index filename with `hashget-admin --list -p PROJECT` command)
+
+Now, if you will make hashget --pack , it will make huge 22M archive again, our magic is lost...
 
 Now, create special *hint* file hashget-hint.json (or .hashget-hint.json , 
 if you want it to be hidden) in /tmp/test with this content:
@@ -241,7 +194,67 @@ STEP 3/3 tarring...
 
 Great! Hashget used hint file and automatically indexed file, so we got our fantastic compression rate again.
 
-### What you should NOT index
+> Directories with hint files are packed effectively even if not indexed before. If you are developer, 
+you can include hashget-hint file inside your package files to make it backup-friendly. 
+This is much more simple way then writing plugin. 
+
+### Heuristic plugins
+Heuristics are small plugins (installed when you did `pip3 install hashget[plugins]`, or can be installed separately)
+which can auto-detect some non-indexed files which could be indexed.
+
+Now, lets add some files to our test machine, we will download linux kernel source code, it's very large:
+~~~
+mydebvm# wget -q https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.4.tar.xz
+mydebvm# tar -xf linux-5.0.4.tar.xz 
+mydebvm# du -sh --apparent-size .
+893M	.
+~~~
+
+If we will pack this machine same way as before we will see this:
+~~~
+# hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ \
+    --exclude var/cache/apt var/lib/apt/lists
+STEP 1/3 Indexing debian packages...
+Total: 222 packages
+Indexing done in 0.03s. 222 local + 0 pulled + 0 new = 222 total.
+submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.5.tar.xz
+STEP 2/3 prepare exclude list for packing...
+saved: 59095 files, 217 pkgs, size: 1.3G. Download: 199.1M
+STEP 3/3 tarring...
+/var/lib/lxc/mydebvm/rootfs/ (1.5G) packed into /tmp/mydebian.tar.gz (8.7M)
+~~~
+
+One very interesting line here is:
+~~~
+submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.5.tar.xz
+~~~
+
+Hashget detected linux kernel sources package, downloaded and indexed it. And we got fantastic result again: 1.5G 
+packed into just 8.7M!
+
+This happened because hashget has heuristical plugin which detects linux kernel sources and guesses URL to index it. 
+This plugin puts index files for kernel packages into 'kernel.org' hashget project.
+
+*Hashget packs this into 8 Mb in 28 seconds (on my Core i5 computer) vs 426Mb in 48 seconds with plain tar -czf. 
+(And 3 minutes with hashget/tar/gz vs 4 minutes with tar on slower notebook). Hashget packs faster and often 
+much more effective.*
+
+If you will make `hashget-admin --status` you will see kernel.org project. `hashget-admin --list -p PROJECT` will 
+show content of project:
+~~~
+# hashget-admin --list -p kernel.org
+linux-5.0.5.tar.xz (767/50579)
+~~~
+
+Even when new kernel package will be released (and it's not indexed anywhere), hashget will detect it and 
+automatically index (at least while new linux kernels will match same 'template' as it matches now for kernels 
+1.0 to 5.0.6).
+
+> Users and developers of large packages can write their own hashget plugins using [Linux kernel hashget plugin](https://gitlab.com/yaroslaff/hashget-kernel_org/)
+as example. 
+
+
+### What you should index 
 You should index ONLY static and permanent files, which will be available on same URL with same content.
 Not all projects provides such files. Usual linux package repositories has only latest files so it's not good for this
 purpose, but debian has great [snapshot.debian.org](https://snapshot.debian.org/) repository, which makes Debian great 
