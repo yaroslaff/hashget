@@ -86,7 +86,7 @@ which we **explicitly** --exclude'd. Hashget didn't misses anything on it's own)
 ## Advanced
 
 ### Heuristics
-Heuristics is small plugins (installed when you did `pip3 install hashget[plugins]`, or can be installed separately)
+Heuristics are small plugins (installed when you did `pip3 install hashget[plugins]`, or can be installed separately)
 which can auto-detect some non-indexed files which could be indexed.
 
 Now, lets add some files to our test machine:
