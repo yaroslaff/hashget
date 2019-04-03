@@ -23,8 +23,6 @@ import logging
 import shutil
 import tempfile
 import subprocess
-import json
-
 
 # from requests.packages.urllib3.util.retry import Retry
 # from requests.adapters import HTTPAdapter
@@ -39,7 +37,7 @@ import hashget.globlist
 from hashget.debian import DebStatus, debsubmit
 from hashget.restorefile import RestoreFile
 from hashget.singlelist import SingleList
-from hashget.heuristics.base import HeuristicSet
+from hashget.heuristic_base import HeuristicSet
 
 BUF_SIZE = 1024*1024
 

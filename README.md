@@ -19,7 +19,7 @@ Hashget archive (in contrast to incremental and differential archive) is 'self-s
 
 Pip (recommended):
 ~~~
-pip3 install hashget
+pip3 install hashget[plugins]
 ~~~
 
 or clone from git:
@@ -35,7 +35,8 @@ git clone https://gitlab.com/yaroslaff/hashget.git
 Compressing [test machine](https://gitlab.com/yaroslaff/hashget/wikis/Test-machine): 
 
 ~~~
-# hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ --exclude var/cache/apt var/lib/apt/lists
+# hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ \
+    --exclude var/cache/apt var/lib/apt/lists
 STEP 1/3 Indexing debian packages...
 Total: 222 packages
 Indexing done in 0.02s. 222 local + 0 pulled + 0 new = 222 total.
@@ -53,7 +54,8 @@ Now lets compare results with usual tarring
 # du -sh --apparent-size /var/lib/lxc/mydebvm/rootfs/
 693M	/var/lib/lxc/mydebvm/rootfs/
 
-# tar -czf /tmp/mydebvm-orig.tar.gz  --exclude=var/cache/apt --exclude=var/lib/apt/lists -C /var/lib/lxc/mydebvm/rootfs/ .
+# tar -czf /tmp/mydebvm-orig.tar.gz  --exclude=var/cache/apt \
+    --exclude=var/lib/apt/lists -C /var/lib/lxc/mydebvm/rootfs/ .
 
 # ls -lh mydebvm*
 -rw-r--r-- 1 root root 165M Mar 29 00:27 mydebvm-orig.tar.gz
@@ -81,9 +83,11 @@ Recovered 8534/8534 files 450.0M bytes (49.9M downloaded, 49.1M cached) in 242.6
 Now we have fully working debian system. Some files are still missing (e.g. APT list files in /var/lib/apt/lists, 
 which we **explicitly** --exclude'd. Hashget didn't misses anything on it's own) but can be created with 'apt update' command.
 
-## Heuristics
-Heuristics is small subprograms (part of hashget package) which can auto-detect some non-indexed files which 
-could be indexed.
+## Advanced
+
+### Heuristics
+Heuristics is small plugins (installed when you did `pip3 install hashget[plugins]`, or can be installed separately)
+which can auto-detect some non-indexed files which could be indexed.
 
 Now, lets add some files to our test machine:
 ~~~
@@ -130,8 +134,12 @@ Even when new kernel package will be released (and it's not indexed anywhere), h
 automatically index (at least while new linux kernels will match same 'template' as it matches now for kernels 
 1.0 to 5.0.5).
 
-## Manually indexing files to local HashDB
-Now lets make test directory for packing.
+Users and developers of large packages can write their own hashget plugins using [Linux kernel hashget plugin](https://gitlab.com/yaroslaff/hashget-kernel_org/)
+as example.
+
+### Manually indexing files to local HashDB
+Now lets make test directory with wordpress for packing.
+
 ~~~
 # mkdir /tmp/test
 # cd /tmp/test/
@@ -200,7 +208,7 @@ and --pack it, it will be just little bigger (158K for me instead of 157.9) but 
 This file has different hashsum, so it will be .tar.gz'ipped and not recovered from wordpress archive as other 
 wordpress files.
 
-# Hint files
+### Hint files
 If our package is indexed (like we just did with wordpress) it will be very effectively deduplicated on packing.
 But what if it's not indexed? For example, if you cleaned hashdb cache or if you will restored this backup on other 
 machine and pack it again. It will take it's full space again. 
@@ -233,7 +241,7 @@ STEP 3/3 tarring...
 
 Great! Hashget used hint file and automatically indexed file, so we got our fantastic compression rate again.
 
-## What you should NOT index
+### What you should NOT index
 You should index ONLY static and permanent files, which will be available on same URL with same content.
 Not all projects provides such files. Usual linux package repositories has only latest files so it's not good for this
 purpose, but debian has great [snapshot.debian.org](https://snapshot.debian.org/) repository, which makes Debian great 
@@ -242,7 +250,7 @@ for hashget compression.
 Do not index *latest* files, because content will change    later (it's not _static_). E.g. you may index 
 https://wordpress.org/wordpress-5.1.1.zip but you should not index https://wordpress.org/latest.zip 
 
-## Documentation
+# Documentation
 For more detailed documentation see [Wiki](https://gitlab.com/yaroslaff/hashget/wikis/home).
 
 

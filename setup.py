@@ -26,7 +26,7 @@ def read(fname):
 setup(
     name='hashget',
     version=vermod.__version__,
-    packages=['hashget', 'hashget.heuristics'],
+    packages=['hashget', 'hashget.heuristics.hint'],
     scripts=['bin/hashget', 'bin/hashget-admin'],
 
     install_requires=['patool','filetype','filelock','setuptools', 'requests'],
@@ -39,6 +39,9 @@ setup(
     author_email='yaroslaff@gmail.com',
     description='hashget deduplication and compression tool',
 
+    extras_require={
+        'plugins': ["hashget-kernel_org"],
+    },
     python_requires='>=3',
     classifiers=[
         'Development Status :: 3 - Alpha',

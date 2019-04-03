@@ -1,9 +1,7 @@
-import re
 import os
 import json
 
-from .base import BaseHeuristic, SubmitRequest
-
+from hashget.heuristic_base import BaseHeuristic, SubmitRequest
 
 class HintHeuristic(BaseHeuristic):
     codename = 'hint'
@@ -30,3 +28,6 @@ class HintHeuristic(BaseHeuristic):
             return [sr]
 
         return list()
+
+
+heuristics = [ HintHeuristic ]
