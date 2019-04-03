@@ -147,7 +147,7 @@ my DirHashDB(path:/var/cache/hashget/hashdb/my stor:basename pkgtype:generic pac
 
 ~~~
 It takes just 100K on disk, has 1 package indexed (11.7M), over 1395 total files. You can clean HashDB, but usually 
-it's not needed, because HashDB is very small. 
+it's not needed, because HashDB is very small. You can get list of indexes in project with `hashget-admin --list -p my`
 
 And one important thing - hashget archiving keeps all your changes! If you will make any changes in data, e.g.:
 ~~~
@@ -157,7 +157,7 @@ and --pack it, it will be just little bigger (158K for me instead of 157.9) but 
 Modified file has other hashsum, so it will be .tar.gz'ipped and not recovered from wordpress archive as other 
 wordpress files.
 
-> Manual indexing is easy way to optimize packing of particular large packages.
+> Manual indexing is easy way to optimize packing of individual large packages.
 
 ### Hint files
 If our package is indexed (like we just did with wordpress) it will be very effectively deduplicated on packing.
@@ -172,7 +172,7 @@ We will delete index for this file:
 
 Now, if you will make hashget --pack , it will make huge 22M archive again, our magic is lost...
 
-Now, create special *hint* file hashget-hint.json (or .hashget-hint.json , 
+Now, create special small *hint* file hashget-hint.json (or .hashget-hint.json , 
 if you want it to be hidden) in /tmp/test with this content:
 ~~~
 {
@@ -230,7 +230,7 @@ submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.5.tar.xz
 ~~~
 
 Hashget detected linux kernel sources package, downloaded and indexed it. And we got fantastic result again: 1.5G 
-packed into just 8.7M!
+packed into just 8.7M! Package was not indexed before.
 
 This happened because hashget has heuristical plugin which detects linux kernel sources and guesses URL to index it. 
 This plugin puts index files for kernel packages into 'kernel.org' hashget project.
