@@ -307,8 +307,13 @@ class HashServer:
         self.config['accept_url'] = list()
 
         r = requests.get(urllib.parse.urljoin(self.url, 'config.json'), headers=self.headers)
+
         if r.status_code == 200:
-            self.config = {**self.config, **json.loads(r.text)}
+            print(self.config)
+            self.config.update(json.loads(r.text))
+            print(self.config)
+            # this method works only with 3.5 and above
+            # self.config = {**self.config, **json.loads(r.text)}
 
         r = requests.get(urllib.parse.urljoin(self.url, self.config['motd']), headers=self.headers)
         log.info(r.text.rstrip())
