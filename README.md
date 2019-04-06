@@ -253,7 +253,6 @@ automatically index (at least while new linux kernels will match same 'template'
 > Users and developers of large packages can write their own hashget plugins using [Linux kernel hashget plugin](https://gitlab.com/yaroslaff/hashget-kernel_org/)
 as example. 
 
-
 ### What you should index 
 You should index ONLY static and permanent files, which will be available on same URL with same content.
 Not all projects provides such files. Usual linux package repositories has only latest files so it's not good for this
@@ -263,8 +262,53 @@ for hashget compression.
 Do not index *latest* files, because content will change    later (it's not _static_). E.g. you may index 
 https://wordpress.org/wordpress-5.1.1.zip but you should not index https://wordpress.org/latest.zip 
 
+### Incremental / Differential backups with hashget
+
+Prepare data for test
+```shell
+$ mkdir /tmp/test
+$ dd if=/dev/urandom of=/tmp/test/1M bs=1M count=1
+1+0 records in
+1+0 records out
+1048576 bytes (1.0 MB, 1.0 MiB) copied, 0.0198294 s, 52.9 MB/s
+```
+
+Make first full backup
+```shell
+$ hashget -zf /tmp/full.tar.gz --pack /tmp/test
+Development hashget hashdb repository
+https://gitlab.com/yaroslaff/hashget
+STEP 1/3 Indexing...
+Indexing done in 0.00s. 0 local + 0 pulled + 0 new = 0 total packages
+STEP 2/3 prepare exclude list for packing...
+saved: 0 files, 0 pkgs, size: 0. Download: 0
+STEP 3/3 tarring...
+test (1.0M) packed into /tmp/full.tar.gz (1.0M)
+```
+1M packed into 1M.
+
+Put into into http available resource and index
+```shell
+$ sudo cp /tmp/full.tar.gz /var/www/html/hg/
+$ hashget --submit http://localhost/hg/full.tar.gz --project my_incremental
+```
+
+Make any changes to data and pack again
+```shell
+$ date > /tmp/test/date
+
+$ hashget -zf /tmp/today.tar.gz --pack /tmp/test
+Development hashget hashdb repository
+https://gitlab.com/yaroslaff/hashget
+STEP 1/3 Indexing...
+Indexing done in 0.00s. 0 local + 0 pulled + 0 new = 0 total packages
+STEP 2/3 prepare exclude list for packing...
+saved: 1 files, 1 pkgs, size: 1.0M. Download: 1.0M
+STEP 3/3 tarring...
+/tmp/test (1.0M) packed into /tmp/today.tar.gz (473.0)
+```
+Incremental backup is 473 bytes. But requires full backup available on same URL for unpacking
+
 # Documentation
 For more detailed documentation see [Wiki](https://gitlab.com/yaroslaff/hashget/wikis/home).
-
-
 
