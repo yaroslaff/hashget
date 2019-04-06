@@ -35,7 +35,7 @@ git clone https://gitlab.com/yaroslaff/hashget.git
 Compressing [test machine](https://gitlab.com/yaroslaff/hashget/wikis/Test-machine): 
 
 ```shell
-# hashget -zf /tmp/mydebvm.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ \
+hashget -zf /tmp/mydebvm.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ \
     --exclude var/cache/apt var/lib/apt/lists
 STEP 1/3 Indexing debian packages...
 Total: 222 packages
@@ -51,13 +51,13 @@ STEP 3/3 tarring...
 
 Now lets compare results with usual tarring
 ```shell
-# du -sh --apparent-size /var/lib/lxc/mydebvm/rootfs/
+du -sh --apparent-size /var/lib/lxc/mydebvm/rootfs/
 693M	/var/lib/lxc/mydebvm/rootfs/
 
-# tar -czf /tmp/mydebvm-orig.tar.gz  --exclude=var/cache/apt \
+tar -czf /tmp/mydebvm-orig.tar.gz  --exclude=var/cache/apt \
     --exclude=var/lib/apt/lists -C /var/lib/lxc/mydebvm/rootfs/ .
 
-# ls -lh mydebvm*
+ls -lh mydebvm*
 -rw-r--r-- 1 root root 165M Mar 29 00:27 mydebvm-orig.tar.gz
 -rw-r--r-- 1 root root 4.1M Mar 29 00:24 mydebvm.tar.gz
 ```
@@ -67,15 +67,15 @@ Optimized backup is 40 times smaller!
 
 Untarring:
 ```shell
-# mkdir rootfs
-# tar -xzf mydebvm.tar.gz -C rootfs
-# du -sh --apparent-size rootfs/
+mkdir rootfs
+tar -xzf mydebvm.tar.gz -C rootfs
+du -sh --apparent-size rootfs/
 130M	rootfs/
 ```
 
 After untarring, we have just 130 Mb. Now, get all the missing files with hashget:
 ```shell
-# hashget -u rootfs/
+hashget -u rootfs/
 Recovered 8534/8534 files 450.0M bytes (49.9M downloaded, 49.1M cached) in 242.68s
 ```
 (you can run with -v for verbosity)
@@ -89,22 +89,22 @@ which we **explicitly** --exclude'd. Hashget didn't misses anything on it's own)
 Lets make test directory with wordpress for packing.
 
 ```shell
-# mkdir /tmp/test
-# cd /tmp/test/
-# wget -q https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
-# unzip wordpress-5.1.1-ru_RU.zip 
+mkdir /tmp/test
+cd /tmp/test/
+wget -q https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
+unzip wordpress-5.1.1-ru_RU.zip 
 Archive:  wordpress-5.1.1-ru_RU.zip
    creating: wordpress/
   inflating: wordpress/wp-login.php  
   inflating: wordpress/wp-cron.php   
 ....
-# du -sh --apparent-size .
+du -sh --apparent-size .
 54M	.
 ```
 
 and now we will pack it:
 ```shell
-# hashget -zf /tmp/test.tar.gz --pack /tmp/test/
+hashget -zf /tmp/test.tar.gz --pack /tmp/test/
 STEP 1/3 Indexing...
 STEP 2/3 prepare exclude list for packing...
 saved: 4 files, 3 pkgs, size: 104.6K. Download: 3.8M
@@ -117,8 +117,8 @@ usual license files). Still ok, but not as impressive as before. Lets fix miracl
 
 We will index this WordPress version, and it will be compressed very effectively.
 ```shell
-# hashget --project my --submit https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
-# hashget -zf /tmp/test.tar.gz --pack /tmp/test/
+hashget --project my --submit https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
+hashget -zf /tmp/test.tar.gz --pack /tmp/test/
 STEP 1/3 Indexing...
 STEP 2/3 prepare exclude list for packing...
 saved: 1396 files, 1 pkgs, size: 52.2M. Download: 11.7M
@@ -129,7 +129,7 @@ STEP 3/3 tarring...
 
 We can look our project details:
 ```shell
-# hashget-admin --status -p my
+hashget-admin --status -p my
 my DirHashDB(path:/var/cache/hashget/hashdb/my stor:basename pkgtype:generic packages:0)
   size: 119.4K
   packages: 1
@@ -150,7 +150,7 @@ it's not needed, because HashDB is very small. You can get list of indexes in pr
 
 And one important thing - hashget archiving keeps all your changes! If you will make any changes in data, e.g.:
 ```shell
-# echo zzz >> wordpress/index.php
+echo zzz >> wordpress/index.php
 ```
 and --pack it, it will be just little bigger (158K for me instead of 157.9) but will keep your changed file as-is.
 Modified file has other hashsum, so it will be .tar.gz'ipped and not recovered from wordpress archive as other 
@@ -165,7 +165,7 @@ machine and pack it again. It will take it's full space again.
 
 We will delete index for this file:
 ```shell
-# hashget-admin --purge wordpress-5.1.1-ru_RU.zip
+hashget-admin --purge wordpress-5.1.1-ru_RU.zip
 ```
 (you can get index filename with `hashget-admin --list -p PROJECT` command)
 
@@ -182,7 +182,7 @@ if you want it to be hidden) in /tmp/test with this content:
 
 And now try compress it again:
 ```shell
-# hashget -zf /tmp/test.tar.gz --pack /tmp/test
+hashget -zf /tmp/test.tar.gz --pack /tmp/test
 STEP 1/3 Indexing...
 submitting https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
 STEP 2/3 prepare exclude list for packing...
