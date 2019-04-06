@@ -18,14 +18,14 @@ Hashget archive (in contrast to incremental and differential archive) is 'self-s
 ## Installation
 
 Pip (recommended):
-~~~
+```shell
 pip3 install hashget[plugins]
-~~~
+```
 
 or clone from git:
-~~~
+```shell
 git clone https://gitlab.com/yaroslaff/hashget.git
-~~~
+```
 
 
 ## QuickStart
@@ -34,7 +34,7 @@ git clone https://gitlab.com/yaroslaff/hashget.git
 
 Compressing [test machine](https://gitlab.com/yaroslaff/hashget/wikis/Test-machine): 
 
-~~~
+```shell
 # hashget -zf /tmp/mydebvm.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ \
     --exclude var/cache/apt var/lib/apt/lists
 STEP 1/3 Indexing debian packages...
@@ -44,13 +44,13 @@ STEP 2/3 prepare exclude list for packing...
 saved: 8515 files, 216 pkgs, size: 445.8M. Download: 98.7M
 STEP 3/3 tarring...
 /var/lib/lxc/mydebvm/rootfs/ (687.2M) packed into /tmp/mydebian.tar.gz (4.0M)
-~~~
+```
 
 `--exclude` directive tells hashget and tar to skip some directories which are not necessary in backup. 
 (You can omit it, backup will be larger)
 
 Now lets compare results with usual tarring
-~~~
+```shell
 # du -sh --apparent-size /var/lib/lxc/mydebvm/rootfs/
 693M	/var/lib/lxc/mydebvm/rootfs/
 
@@ -60,24 +60,24 @@ Now lets compare results with usual tarring
 # ls -lh mydebvm*
 -rw-r--r-- 1 root root 165M Mar 29 00:27 mydebvm-orig.tar.gz
 -rw-r--r-- 1 root root 4.1M Mar 29 00:24 mydebvm.tar.gz
-~~~
+```
 Optimized backup is 40 times smaller!
 
 ### Decompressing
 
 Untarring:
-~~~
+```shell
 # mkdir rootfs
 # tar -xzf mydebvm.tar.gz -C rootfs
 # du -sh --apparent-size rootfs/
 130M	rootfs/
-~~~
+```
 
 After untarring, we have just 130 Mb. Now, get all the missing files with hashget:
-~~~
+```shell
 # hashget -u rootfs/
 Recovered 8534/8534 files 450.0M bytes (49.9M downloaded, 49.1M cached) in 242.68s
-~~~
+```
 (you can run with -v for verbosity)
 
 Now we have fully working debian system. Some files are still missing (e.g. APT list files in /var/lib/apt/lists, 
@@ -88,7 +88,7 @@ which we **explicitly** --exclude'd. Hashget didn't misses anything on it's own)
 ### Manually indexing files to local HashDB
 Lets make test directory with wordpress for packing.
 
-~~~
+```shell
 # mkdir /tmp/test
 # cd /tmp/test/
 # wget -q https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
@@ -100,23 +100,23 @@ Archive:  wordpress-5.1.1-ru_RU.zip
 ....
 # du -sh --apparent-size .
 54M	.
-~~~
+```
 
 and now we will pack it:
-~~~
+```shell
 # hashget -zf /tmp/test.tar.gz --pack /tmp/test/
 STEP 1/3 Indexing...
 STEP 2/3 prepare exclude list for packing...
 saved: 4 files, 3 pkgs, size: 104.6K. Download: 3.8M
 STEP 3/3 tarring...
 /tmp/test/ (52.3M) packed into /tmp/test.tar.gz (22.1M)
-~~~
+```
 
 Thats same result as usual tar would do. Only ~100K saved (you can see it in .hashget-restore.json file, there are
 usual license files). Still ok, but not as impressive as before. Lets fix miracle and make it impressive again!
 
 We will index this WordPress version, and it will be compressed very effectively.
-~~~
+```shell
 # hashget --project my --submit https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
 # hashget -zf /tmp/test.tar.gz --pack /tmp/test/
 STEP 1/3 Indexing...
@@ -124,11 +124,11 @@ STEP 2/3 prepare exclude list for packing...
 saved: 1396 files, 1 pkgs, size: 52.2M. Download: 11.7M
 STEP 3/3 tarring...
 /tmp/test/ (52.3M) packed into /tmp/test.tar.gz (157.9K)
-~~~  
+```
 50M packed into 150K. Very good! What other archiver can make such great compression? (300+ times smaller!)
 
 We can look our project details:
-~~~
+```shell
 # hashget-admin --status -p my
 my DirHashDB(path:/var/cache/hashget/hashdb/my stor:basename pkgtype:generic packages:0)
   size: 119.4K
@@ -144,15 +144,14 @@ my DirHashDB(path:/var/cache/hashget/hashdb/my stor:basename pkgtype:generic pac
   noanchor size: 0
   no anchor link: 0
   bad anchor link: 0
-
-~~~
+```
 It takes just 100K on disk, has 1 package indexed (11.7M), over 1395 total files. You can clean HashDB, but usually 
 it's not needed, because HashDB is very small. You can get list of indexes in project with `hashget-admin --list -p my`
 
 And one important thing - hashget archiving keeps all your changes! If you will make any changes in data, e.g.:
-~~~
+```shell
 # echo zzz >> wordpress/index.php
-~~~
+```
 and --pack it, it will be just little bigger (158K for me instead of 157.9) but will keep your changed file as-is.
 Modified file has other hashsum, so it will be .tar.gz'ipped and not recovered from wordpress archive as other 
 wordpress files.
@@ -165,24 +164,24 @@ But what if it's not indexed? For example, if you cleaned hashdb cache or if you
 machine and pack it again. It will take it's full space again. 
 
 We will delete index for this file:
-~~~
+```shell
 # hashget-admin --purge wordpress-5.1.1-ru_RU.zip
-~~~
+```
 (you can get index filename with `hashget-admin --list -p PROJECT` command)
 
 Now, if you will make hashget --pack , it will make huge 22M archive again, our magic is lost...
 
 Now, create special small *hint* file hashget-hint.json (or .hashget-hint.json , 
 if you want it to be hidden) in /tmp/test with this content:
-~~~
+```json
 {
 	"project": "wordpress.org",
 	"url": "https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip"
 }
-~~~
+```
 
 And now try compress it again:
-~~~
+```shell
 # hashget -zf /tmp/test.tar.gz --pack /tmp/test
 STEP 1/3 Indexing...
 submitting https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
@@ -190,7 +189,7 @@ STEP 2/3 prepare exclude list for packing...
 saved: 1396 files, 1 pkgs, size: 52.2M. Download: 11.7M
 STEP 3/3 tarring...
 /tmp/test (52.3M) packed into /tmp/test.tar.gz (157.9K)
-~~~
+```
 
 Great! Hashget used hint file and automatically indexed file, so we got our fantastic compression rate again.
 
@@ -203,15 +202,15 @@ Heuristics are small plugins (installed when you did `pip3 install hashget[plugi
 which can auto-detect some non-indexed files which could be indexed.
 
 Now, lets add some files to our test machine, we will download linux kernel source code, it's very large:
-~~~
+```shell
 mydebvm# wget -q https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.4.tar.xz
 mydebvm# tar -xf linux-5.0.4.tar.xz 
 mydebvm# du -sh --apparent-size .
 893M	.
-~~~
+```
 
 If we will pack this machine same way as before we will see this:
-~~~
+```shell
 # hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ \
     --exclude var/cache/apt var/lib/apt/lists
 STEP 1/3 Indexing debian packages...
@@ -222,12 +221,12 @@ STEP 2/3 prepare exclude list for packing...
 saved: 59095 files, 217 pkgs, size: 1.3G. Download: 199.1M
 STEP 3/3 tarring...
 /var/lib/lxc/mydebvm/rootfs/ (1.5G) packed into /tmp/mydebian.tar.gz (8.7M)
-~~~
+```
 
 One very interesting line here is:
-~~~
+```
 submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.5.tar.xz
-~~~
+```
 
 Hashget detected linux kernel sources package, downloaded and indexed it. And we got fantastic result again: 1.5G 
 packed into just 8.7M! Package was not indexed before.
@@ -241,10 +240,10 @@ much more effective.*
 
 If you will make `hashget-admin --status` you will see kernel.org project. `hashget-admin --list -p PROJECT` will 
 show content of project:
-~~~
+```shell
 # hashget-admin --list -p kernel.org
 linux-5.0.5.tar.xz (767/50579)
-~~~
+```
 
 Even when new kernel package will be released (and it's not indexed anywhere), hashget will detect it and 
 automatically index (at least while new linux kernels will match same 'template' as it matches now for kernels 
@@ -308,10 +307,11 @@ Incremental (delta) backup is very short. But will require full backup available
 
 To make new full backup delete old from index:
 ```shell
-
 $ hashget-admin --purge full.tar.gz
+```
 
-# OR hardcore:
+Or delete my_incremental project completely
+```shell
 $ hashget-admin --rmproject -p my_incremental --really
 ```
 
