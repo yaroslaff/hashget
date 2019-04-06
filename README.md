@@ -211,7 +211,7 @@ mydebvm# du -sh --apparent-size .
 
 If we will pack this machine same way as before we will see this:
 ```shell
-# hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ \
+hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ \
     --exclude var/cache/apt var/lib/apt/lists
 STEP 1/3 Indexing debian packages...
 Total: 222 packages
@@ -241,7 +241,7 @@ much more effective.*
 If you will make `hashget-admin --status` you will see kernel.org project. `hashget-admin --list -p PROJECT` will 
 show content of project:
 ```shell
-# hashget-admin --list -p kernel.org
+hashget-admin --list -p kernel.org
 linux-5.0.5.tar.xz (767/50579)
 ```
 
