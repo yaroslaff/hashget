@@ -64,7 +64,7 @@ def deb_index(hashdb, path, anchors, filesz=10000, sleep=1):
 
 
 class DebianStatusHeuristic(BaseHeuristic):
-    codename = 'hint'
+    codename = 'debian'
 
     def __init__(self, hashdb=None):
         super().__init__(hashdb=hashdb)

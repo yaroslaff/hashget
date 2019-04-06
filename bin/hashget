@@ -284,7 +284,9 @@ def get_by_hashspec(hashdb, hashspec, outdir):
     log.info(dst)
 
 def index(hashdb, path, anchors, filesz=10000, heuristics=None):
-    heuristics = heuristics or list(['all'])
+
+    if heuristics is None:
+        heuristics = list(['all'])
 
     heur = HeuristicSet(hashdb=hashdb, heuristics=heuristics)
 
@@ -340,6 +342,15 @@ def main():
     def_outdir = '.'
     def_target = 'auto'
     def_heuristics = ['all']
+    def_hashdb = ['all']
+
+    # default path
+    if os.getuid() == 0:
+        # root
+        def_hashdb_path = '/var/cache/hashget/hashdb'
+    else:
+        # usual user
+        def_hashdb_path = os.path.expanduser("~/.hashget/hashdb")
 
     parser = argparse.ArgumentParser(description='HashGet ver {} deduplication and compression tool'.
                                      format(hashget.__version__))
@@ -372,7 +383,9 @@ def main():
 
     g = parser.add_argument_group('Other options')
     g.add_argument('--hashserver', nargs='*', default=def_hashserver, help='hashserver URL ({})'.format(def_hashserver))
-    g.add_argument('--hashdb', default=None, help='path to local hashdb directory')
+    g.add_argument('--hashdb_path', default=def_hashdb_path, help='path to local hashdb directory ({})'.format(def_hashdb_path))
+    g.add_argument('--hashdb', default=def_hashdb, nargs='*', metavar='PROJECT',
+                   help='Use only these hashdb. {}'.format(def_hashdb))
     g.add_argument('-X', '--exclude-from', metavar='FILENAME', dest='excludefile', default=def_excludefile,
                    help='Exclude file (for -X tar option) ({})'.format(def_excludefile))
     g.add_argument('--etag', default=False, action='store_true', help='verify HTTP E-Tag when reuse cached files')
@@ -410,7 +423,6 @@ def main():
         print('HashGet version {}'.format(hashget.__version__))
         sys.exit(0)
 
-
     # configure logging
     if args.verbose:
         loglevel = logging.DEBUG
@@ -428,10 +440,7 @@ def main():
         fh.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
         log.addHandler(fh)
 
-
-
-    log.debug('Loading hashdb')
-    hashdb = hashget.hashdb.HashDBClient(args.hashdb)
+    hashdb = hashget.hashdb.HashDBClient(path=args.hashdb_path, enabled_hashdb=args.hashdb)
 
     anchors = hashget.AnchorList(args.anchsz)
     for fa in args.fanchor:

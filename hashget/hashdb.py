@@ -295,6 +295,8 @@ class HashServer:
         if not self.url.endswith('/'):
             self.url = self.url+'/'
 
+        log.debug('Initialize remote HashDB {}'.format(self.url))
+
         self.headers = dict()
         self.headers['User-Agent'] = __user_agent__
 
@@ -309,9 +311,7 @@ class HashServer:
         r = requests.get(urllib.parse.urljoin(self.url, 'config.json'), headers=self.headers)
 
         if r.status_code == 200:
-            print(self.config)
             self.config.update(json.loads(r.text))
-            print(self.config)
             # this method works only with 3.5 and above
             # self.config = {**self.config, **json.loads(r.text)}
 
@@ -423,12 +423,17 @@ class HashServer:
 
 
 class HashDBClient(HashDB):
-    def __init__(self, path=None, load=True):
+    def __init__(self, path=None, load=True, enabled_hashdb=None):
 
         super().__init__()
 
         self.hashserver = list()
         self.stats = dict(q=0, miss=0, hits=0)
+
+        if enabled_hashdb is None:
+            self.enabled_hashdb = ['all']
+        else:
+            self.enabled_hashdb = enabled_hashdb
 
         if path:
             self.path = path        
@@ -448,9 +453,14 @@ class HashDBClient(HashDB):
         self.hashdb = dict()
 
         for name in os.listdir(self.path):
-            project_path = os.path.join(self.path, name)
-            if os.path.isdir(project_path):
-                self.hashdb[name] = DirHashDB(path=project_path, load=load)
+
+            if 'all' in self.enabled_hashdb or name in self.enabled_hashdb:
+                log.debug('Load hashdb {}'.format(name))
+                project_path = os.path.join(self.path, name)
+                if os.path.isdir(project_path):
+                    self.hashdb[name] = DirHashDB(path=project_path, load=load)
+            else:
+                log.debug('Skip loading hashdb {}'.format(name))
 
     def __repr__(self):
         return("HashClient(l{} n{} q{} h{} m{})".format(
@@ -460,7 +470,6 @@ class HashDBClient(HashDB):
 
     def add_hashserver(self, url):
         hs = HashServer(url=url)
-        log.debug('add hashserver {}'.format(hs))
         self.hashserver.append(hs)
         if '_cached' not in self.hashdb:
             self.create_project('_cached')
