@@ -303,10 +303,15 @@ def index(hashdb, path, anchors, filesz=10000, heuristics=None):
             if os.path.islink(filename):
                 continue
 
-            for sr in heur.process(filename):
+            srlist = heur.process(filename)
+
+            if(srlist):
+                print("Got {} submit requests".format(len(srlist)))
+
+            for sr in srlist:
+
                 total += 1
 
-                # print(sr)
                 if sr.sig_present():
                     log.debug("local {}".format(sr.first_sig()[1]))
                     local += 1
@@ -357,8 +362,8 @@ def main():
 
     g = parser.add_argument_group('Packing/unpacking')
     g.add_argument('--pack', default=None, metavar='DIR',
-                   help='Make .tar.gz of dir into -f file (set of --debindex, --prepack and then tar -czf .. -X)')
-    g.add_argument('--prepack', '-p', default=None, metavar='DIR', help='prepare DIR for hash-tarring')
+                   help='Make .tar.gz of dir into -f file (set of --index, --prepack and then tar -czf .. -X)')
+    g.add_argument('--prepack', default=None, metavar='DIR', help='prepare DIR for hash-tarring')
     g.add_argument('--postunpack', '-u', default=None, metavar='DIR', help='post-unpack')
 
     g = parser.add_argument_group('Fetching packages and files')
@@ -368,13 +373,12 @@ def main():
     g = parser.add_argument_group('Local HashDB commands')
     g.add_argument('--submit', default=None, metavar='URL', help='submit URL to --project')
     g.add_argument('--index', default=None, metavar='DIR', help='index files in DIR')
-    g.add_argument('--debindex', default=None, metavar='DIR', help='index packages from root fs in DIR')
     g.add_argument('--debsubmit', default=None, metavar='package.deb', help='submit local .deb file')
 
     g = parser.add_argument_group('Crawling options')
     g.add_argument('--anchsz', type=int, default=def_anchsz, help='min size of anchors ({})'.format(def_anchsz))
     g.add_argument('--filesz', type=int, default=def_filesz, help='min size of files ({})'.format(def_filesz))
-    g.add_argument('--project', default=def_project, help='project name ({})'.format(def_project))
+    g.add_argument('--project', '-p', default=def_project, help='project name ({})'.format(def_project))
     g.add_argument('--sleep', type=int, default=def_sleep, help='delay ({}s)'.format(def_sleep))
     g.add_argument('--fanchor', nargs='+', metavar='FILEGLOB', default=list(),
                    help='forced anchor glob, e.g. --fanchor ".*Makefile" etc/passwd')
@@ -397,9 +401,10 @@ def main():
                    help='pull anchors from hashserver (slower)')
     g.add_argument('--recursive', default=False, action='store_true', help='recursive unpacking (slower).')
     g.add_argument('-z', default=False, action='store_true', help='gzip tarred archive')
+    g.add_argument('--sig', nargs='+', default=list(), metavar='SIG', help='Signature for --submit. format: SIGTYPE:SIGNATURE')
 
 
-    g = parser.add_argument_group('Target system specification')
+    g = parser.add_argument_group('Target directory specification')
     #g.add_argument('--target', '-t', default=def_target,
     #               help='Target specification (files/debian/auto) ({})'.format(def_target))
     g.add_argument('--exclude', nargs='+', metavar='PATH', default=def_exclude_dirs,
@@ -493,6 +498,11 @@ def main():
             get_by_sig(hashdb, 'deb', sig, args.outdir)
 
     if args.submit:
+        signatures = dict()
+        if args.sig:
+            for sigspec in args.sig:
+                sigtype, signature = sigspec.split(':', 1)
+                signatures[sigtype] = signature
 
         if not args.project:
             log.error('need --project when --submit')
@@ -504,6 +514,7 @@ def main():
             file=args.file,
             project=args.project,
             anchors=anchors,
+            signatures=signatures,
             filesz=args.filesz)
 
     if args.debsubmit:
