@@ -14,8 +14,15 @@ import filelock
 
 from hashget.debian import debsubmit
 from hashget.exceptions import HashPackageExists
-from hashget.utils import kmgt
+from hashget.utils import kmgt, fix_hpspec
 
+
+def hplist(hashdb, project=None, hpspec=None):
+    for name, hdb in hashdb.hashdb.items():
+        if project is None or name == project:
+            for hp in hdb.packages_iter():
+                if hpspec is None or hp.match_hpspec(hpspec):
+                    yield hp
 
 def process_submitted(hashdb, newdir, webroot=None):
 
@@ -67,19 +74,22 @@ def process_submitted(hashdb, newdir, webroot=None):
         shutil.rmtree(updir)
 
 
-def do_dump(hashdb, basename, project=None):
-    try:
-        p = hashdb.basename2hp(basename, project, remote=True)
-        print(p.json())
-    except KeyError as e:
-        log.error(e)
+def do_dump(hashdb, basename, project=None, hpspec=None):
+    for hp in hplist(hashdb=hashdb, project=project, hpspec=hpspec):
+        print(hp.json())
 
+def do_list(hashdb, project=None, hpspec=None):
+    for hp in hplist(hashdb=hashdb, project=project, hpspec=hpspec):
+        print(hp)
 
-def do_list(hashdb, project=None):
-    for name, hdb in hashdb.hashdb.items():
-        if name == project or project is None:
-            for hp in hdb.packages_iter():
-                print(hp)
+def do_purge(hashdb, project=None, hpspec=None, webroot=None, full=False):
+
+    if hpspec is None:
+        print("Will not purge with empty hpspec. Use --hp all")
+        return
+    for hp in hplist(hashdb=hashdb, project=project, hpspec=hpspec):
+        print("Purge", hp)
+        hp.purge(webroot=webroot, full=full)
 
 
 def do_status(hashdb, project=None, webroot=None):
@@ -183,17 +193,18 @@ def main():
     g = parser.add_argument_group('Information')
     g.add_argument('--status', default=False, action='store_true', help='status for --project (or all projects)')
     g.add_argument('--list', default=False, action='store_true', help='list all contents of --project (or all)')
-    g.add_argument('--dump', default=None, metavar='BASENAME',
-                   help='dump one package by basename (can use with --project)')
+    g.add_argument('--dump', default=False, action='store_true',
+                   help='dump one package by basename (can use with --project or --hp)')
 
     g = parser.add_argument_group('Commands')
     g.add_argument('--addproject', default=False, action='store_true', help='create -p project')
     g.add_argument('--rmproject', default=False, action='store_true', help='delete -p project')
     g.add_argument('--modify', default=False, action='store_true', help='modify -p project')
     g.add_argument('--build', default=None, metavar='WEBROOT', help='build static web HashDB')
+    g.add_argument('--verify', default=None, metavar='ACTION', nargs='?', const=True, help='verify package(s). ACTION is report|delete. def: report')
     g.add_argument('--submitted', default=None, metavar='UPLOADS_DIR',
                    help='process submitted packages ({})'.format(def_submitted))
-    g.add_argument('--purge', nargs='+', default=None, metavar=('PkgBaseName', 'WebRoot'),
+    g.add_argument('--purge', default=False, action='store_true',
                    help='purge package and links. (search/delete links if --full)')
     g.add_argument('--clean', default=None, metavar='TARGET',
                    help='one of: {}'.format(clean_targets))
@@ -210,6 +221,7 @@ def main():
 
     g.add_argument('--storage', default=None, help='use this storage type for hashdb')
     g.add_argument('--pkgtype', default=None, help='use this pkgtype for hashdb')
+    g.add_argument('--hp', default=None, metavar='HPSPEC', help='Process only this HashPackage. HPSPEC is URL | basename or sig:SIGTYPE:SIGNATURE')
 
     g.add_argument('--logfile', default=None, help='log file name')
     g.add_argument('--verbose', '-v', default=False, action='store_true', help='verbose logging')
@@ -231,18 +243,19 @@ def main():
         fh.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
         log.addHandler(fh)
 
-    hashdb = hashget.hashdb.HashDBClient(path=args.path, load=False)
 
+    hpspec = fix_hpspec(args.hp)
+    hashdb = hashget.hashdb.HashDBClient(path=args.path, load=False)
     anchors = hashget.AnchorList()
 
     if args.list:
-        do_list(hashdb, args.project)
+        do_list(hashdb=hashdb, project=args.project, hpspec=hpspec)
 
     if args.status:
         do_status(hashdb, args.project, args.webroot)
 
     if args.dump:
-        do_dump(hashdb, args.dump, args.project)
+        do_dump(hashdb, args.dump, args.project, hpspec=hpspec)
 
     if args.addproject:
         print("create project {}".format(args.project))
@@ -305,17 +318,7 @@ def main():
             log.warning("lockfile {} is already used".format(lockfilename))
 
     if args.purge:
-        if len(args.purge) == 2:
-            webroot = args.purge[1]
-        else:
-            webroot = None
-
-        try:
-            p = hashdb.basename2hp(args.purge[0])
-        except KeyError as e:
-            print(e)
-        else:
-            p.purge(webroot=webroot, full=args.full)
+        do_purge(hashdb=hashdb, project=args.project, hpspec=hpspec, webroot=args.webroot, full=args.full)
 
     if args.clean:
         if args.clean not in clean_targets:
@@ -329,5 +332,16 @@ def main():
         if args.clean in ['hashdb', 'all']:
             hashdb.clean()
 
+
+    if args.verify:
+        action = args.verify or 'report'
+        for hp in hplist(hashdb=hashdb, project=args.project, hpspec=hpspec):
+            if hp.verify():
+                print("VERIFIED {}".format(hp))
+            else:
+                print("FAILED VERIFICATION {}".format(hp))
+                if action == 'delete':
+                    print("DELETE {}".format(hp.path))
+                    hp.delete()
 
 main()
