@@ -31,15 +31,16 @@ class SubmitRequest():
         else:
             return ('url', self.url)
 
-
     def sig_present(self, remote=False):
-        for sigtype, signature in self.signatures.items():
-            if self.hashdb.sig_present(sigtype, signature, remote=remote):
-                return True
-
-        # process 'url' signature if missing in signatures
-        if not 'url' in self.signatures:
-            return self.hashdb.sig_present('url', self.url)
+        if self.signatures:
+            # if signatures, check signatures, not url
+            for sigtype, signature in self.signatures.items():
+                if self.hashdb.sig_present(sigtype, signature, remote=remote):
+                    return True
+        else:
+            # process 'url' signature if missing in signatures
+            if not 'url' in self.signatures:
+                return self.hashdb.sig_present('url', self.url)
 
         return False
 
@@ -55,9 +56,8 @@ class SubmitRequest():
         sigtype, signature = self.first_sig()
         return self.hashdb.pull_sig(sigtype, signature)
 
-
     def __repr__(self):
-        return "SR {}".format(self.url)
+        return "SR {} {}".format(self._url, self.signatures)
 
     @property
     def url(self):
