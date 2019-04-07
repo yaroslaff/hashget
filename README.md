@@ -34,8 +34,10 @@ git clone https://gitlab.com/yaroslaff/hashget.git
 
 Compressing [test machine](https://gitlab.com/yaroslaff/hashget/wikis/Test-machine): 
 
+(Since it requires access to VM filesystem, run as user root or use sudo)
+
 ```shell
-hashget -zf /tmp/mydebvm.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ \
+hashget --pack /var/lib/lxc/mydebvm/rootfs/ -zf /tmp/mydebvm.tar.gz \
     --exclude var/cache/apt var/lib/apt/lists
 STEP 1/3 Indexing debian packages...
 Total: 222 packages
