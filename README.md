@@ -119,7 +119,7 @@ usual license files). Still ok, but not as impressive as before. Lets fix miracl
 
 We will index this WordPress version, and it will be compressed very effectively.
 ```shell
-hashget --project my --submit https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
+hashget -p my --submit https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
 hashget --pack /tmp/test/ -zf /tmp/test.tar.gz
 STEP 1/3 Indexing...
 STEP 2/3 prepare exclude list for packing...
