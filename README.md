@@ -106,7 +106,7 @@ du -sh --apparent-size .
 
 and now we will pack it:
 ```shell
-hashget -zf /tmp/test.tar.gz --pack /tmp/test/
+hashget --pack /tmp/test/ -zf /tmp/test.tar.gz
 STEP 1/3 Indexing...
 STEP 2/3 prepare exclude list for packing...
 saved: 4 files, 3 pkgs, size: 104.6K. Download: 3.8M
@@ -120,7 +120,7 @@ usual license files). Still ok, but not as impressive as before. Lets fix miracl
 We will index this WordPress version, and it will be compressed very effectively.
 ```shell
 hashget --project my --submit https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
-hashget -zf /tmp/test.tar.gz --pack /tmp/test/
+hashget --pack /tmp/test/ -zf /tmp/test.tar.gz
 STEP 1/3 Indexing...
 STEP 2/3 prepare exclude list for packing...
 saved: 1396 files, 1 pkgs, size: 52.2M. Download: 11.7M
@@ -184,7 +184,7 @@ if you want it to be hidden) in /tmp/test with this content:
 
 And now try compress it again:
 ```shell
-hashget -zf /tmp/test.tar.gz --pack /tmp/test
+hashget --pack /tmp/test -zf /tmp/test.tar.gz
 STEP 1/3 Indexing...
 submitting https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
 STEP 2/3 prepare exclude list for packing...
@@ -213,7 +213,7 @@ mydebvm# du -sh --apparent-size .
 
 If we will pack this machine same way as before we will see this:
 ```shell
-hashget -zf /tmp/mydebian.tar.gz --pack /var/lib/lxc/mydebvm/rootfs/ \
+hashget --pack /var/lib/lxc/mydebvm/rootfs/ -zf /tmp/mydebian.tar.gz \
     --exclude var/cache/apt var/lib/apt/lists
 STEP 1/3 Indexing debian packages...
 Total: 222 packages
