@@ -131,3 +131,25 @@ class Times():
 
             print("{}: {:.2f}s".format(ttuple[0], ttuple[1]-lasttime))
             lasttime = ttuple[1]
+
+def fix_hpspec(hpspec):
+
+    if hpspec is None:
+        return None
+
+    if hpspec:
+        try:
+            specprefix, spec = hpspec.split(':', 1)
+        except ValueError:
+            specprefix = None
+
+        if specprefix in [ 'sig', 'url', 'name', 'all' ]:
+            return hpspec
+        elif hpspec == 'all':
+            return 'all:all'
+        elif hpspec.startswith("http://") or hpspec.startswith("https://"):
+            return 'url:' + hpspec
+        else:
+            return 'name:' + hpspec
+
+    return hpspec

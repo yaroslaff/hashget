@@ -87,9 +87,12 @@ class DebianStatusHeuristic(BaseHeuristic):
         log.debug("Total: {} dpkg packages".format(np))
 
         for p in debstatus.packages_iter():
-            sr = SubmitRequest(hashdb=self.hashdb, urlmethod=p.get_url, signatures=dict(deb = p.signature), project=self.project)
+            sr = SubmitRequest(
+                hashdb=self.hashdb,
+                urlmethod=p.get_url,
+                signatures=dict(deb = p.signature),
+                project=self.project)
             srlist.append(sr)
-
         return srlist
 
 

@@ -3,8 +3,11 @@ import json
 import logging
 
 from . import utils
+import requests
 
 log = logging.getLogger('hashget')
+from . import __user_agent__
+
 
 class HashPackage(object):
     """
@@ -33,6 +36,14 @@ class HashPackage(object):
         self.hashes = hashes  # list of hashspec for package file itself
         self.attrs = attrs or dict()
         self.signatures = signatures
+
+    def all_specs(self):
+        specs = list()
+        specs.append(self.basename())
+        specs.append(self.url)
+        specs.extend(self.signatures.values())
+        specs = list(set(specs))
+        return specs
 
     def __eq__(self, obj):
         return (self.url == obj.url
@@ -130,3 +141,46 @@ class HashPackage(object):
 
         os.unlink(self.path)
 
+    def delete(self):
+        os.unlink(self.path)
+
+    def verify(self):
+        log.debug('verify {} {}'.format(self, self.url))
+        headers = dict()
+        headers['User-Agent'] = __user_agent__
+        r = requests.head(self.url, headers=headers)
+        if r.status_code != 200:
+            log.debug('Bad status code: {} {}'.format(r.status_code, self))
+            return False
+
+        if 'Content-Length' in r.headers and 'size' in self.attrs:
+            clen = int(r.headers.get('Content-Length'))
+            if self.attrs['size'] != clen:
+                log.debug('Bad Content-Length {} != size {}'.format(clen, self.attrs['size']))
+                return False
+            else:
+                log.debug('size {} match Content-Length'.format(self.attrs['size']))
+
+        return True
+
+    def match_hpspec(self, hpspec):
+
+        prefix, value = hpspec.split(':', 1)
+
+        if prefix == 'all':
+            return True
+
+        if prefix == 'name':
+            return self.basename() == value
+
+        if prefix == 'url':
+            return self.url == value
+
+        if prefix == 'sig':
+            try:
+                sigtype, signature = value.split(':', 1)
+                return self.signatures[sigtype] == signature
+            except (ValueError, KeyError):
+                return False
+
+        return False
