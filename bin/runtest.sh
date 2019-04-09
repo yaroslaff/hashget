@@ -65,7 +65,7 @@ CHECKPOINT
 CHECKPOINT
 
     ls -lh /tmp/${VMNAME}*gz
-    echo
+    echo -----
 
 
     ########## DECOMPRESSING VM
@@ -84,6 +84,7 @@ CHECKPOINT
 CHECKPOINT
 
     du -sh $TDIR/r
+    echo -----
 
 else
     echo ... skip VMTEST
@@ -110,6 +111,7 @@ cat <<CHECKPOINT
 CHECKPOINT
 
 ls -lh /tmp/test-wp.tar.gz
+echo -----
 
 ########## WORDPRESS hint
 
@@ -127,15 +129,14 @@ cat <<CHECKPOINT
 # 158K
 #
 CHECKPOINT
-
 ls -lh /tmp/test-hint-wp.tar.gz
-
+echo -----
 
 ########## WORDPRESS no hint
 
 
 hashget-admin --purge --hp https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
-hashget --pack $TDIR/wp -zf /tmp/test-nohint-wp.tar.gz -v --heur --hashserver --hashdb wordpress.org
+hashget --pack $TDIR/wp -zf /tmp/test-nohint-wp.tar.gz --heur --hashserver --hashdb wordpress.org
 
 cat <<CHECKPOINT
 #
@@ -146,7 +147,7 @@ cat <<CHECKPOINT
 CHECKPOINT
 
 ls -lh /tmp/test-nohint-wp.tar.gz
-
+echo -----
 
 ########## DECOMPRESSING CLEANUP
 # echo clean $TDIR
