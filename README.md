@@ -53,8 +53,8 @@ STEP 3/3 tarring...
 
 Now lets compare results with usual tarring
 ```shell
-du -sh --apparent-size /var/lib/lxc/mydebvm/rootfs/
-693M	/var/lib/lxc/mydebvm/rootfs/
+du -sh /var/lib/lxc/mydebvm/rootfs/
+724M	/var/lib/lxc/mydebvm/rootfs/
 
 tar -czf /tmp/mydebvm-orig.tar.gz  --exclude=var/cache/apt \
     --exclude=var/lib/apt/lists -C /var/lib/lxc/mydebvm/rootfs/ .
@@ -71,8 +71,8 @@ Untarring:
 ```shell
 mkdir rootfs
 tar -xzf mydebvm.tar.gz -C rootfs
-du -sh --apparent-size rootfs/
-130M	rootfs/
+du -sh rootfs/
+145M	rootfs/
 ```
 
 After untarring, we have just 130 Mb. Now, get all the missing files with hashget:

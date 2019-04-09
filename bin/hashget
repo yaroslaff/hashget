@@ -549,7 +549,7 @@ def main():
         #
 
         log.info("STEP {}/{} Indexing...".format(step, nsteps))
-        index(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz)
+        index(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz, heuristics=args.heuristics)
         step += 1
 
         log.info('STEP {}/{} prepare exclude list for packing...'.format(step, nsteps))
