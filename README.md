@@ -100,8 +100,8 @@ Archive:  wordpress-5.1.1-ru_RU.zip
   inflating: wordpress/wp-login.php  
   inflating: wordpress/wp-cron.php   
 ....
-du -sh --apparent-size .
-54M	.
+du -sh .
+57M	.
 ```
 
 and now we will pack it:
@@ -203,42 +203,39 @@ This is much more simple way then writing plugin.
 Heuristics are small plugins (installed when you did `pip3 install hashget[plugins]`, or can be installed separately)
 which can auto-detect some non-indexed files which could be indexed.
 
-Now, lets add some files to our test machine, we will download linux kernel source code, it's very large:
+Lets try test with linux kernel sources package (100Mb+):
+
 ```shell
-mydebvm# wget -q https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.4.tar.xz
-mydebvm# tar -xf linux-5.0.4.tar.xz 
-mydebvm# du -sh --apparent-size .
-893M	.
+$ mkdir /tmp/lk 
+$ cd /tmp/lk
+$ wget -q https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.4.tar.xz
+$ tar -xf linux-5.0.4.tar.xz 
+$ du -sh .
+1.1G	.
 ```
 
 If we will pack this machine same way as before we will see this:
 ```shell
-hashget --pack /var/lib/lxc/mydebvm/rootfs/ -zf /tmp/mydebian.tar.gz \
-    --exclude var/cache/apt var/lib/apt/lists
-STEP 1/3 Indexing debian packages...
-Total: 222 packages
-Indexing done in 0.03s. 222 local + 0 pulled + 0 new = 222 total.
-submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.5.tar.xz
+$ hashget --pack /tmp/lk/ -zf /tmp/lk.tar.gz --hashserver
+STEP 1/3 Indexing...
+submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.4.tar.xz
+Indexing done in 199.27s. 1 local + 0 pulled + 1 new = 2 total packages
 STEP 2/3 prepare exclude list for packing...
-saved: 59095 files, 217 pkgs, size: 1.3G. Download: 199.1M
+saved: 50580 files, 1 pkgs, size: 869.3M. Download: 100.4M
 STEP 3/3 tarring...
-/var/lib/lxc/mydebvm/rootfs/ (1.5G) packed into /tmp/mydebian.tar.gz (8.7M)
+/tmp/lk/ (875.3M) packed into /tmp/lk.tar.gz (4.6M)
 ```
 
 One very interesting line here is:
 ```
-submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.5.tar.xz
+submitting https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.0.4.tar.xz
 ```
 
-Hashget detected linux kernel sources package, downloaded and indexed it. And we got fantastic result again: 1.5G 
-packed into just 8.7M! Package was not indexed before.
+Hashget detected linux kernel sources package, downloaded and indexed it. And we got fantastic result again: almost 200 times! 
+Package was not indexed before and was indexed during packing.
 
 This happened because hashget has heuristical plugin which detects linux kernel sources and guesses URL to index it. 
 This plugin puts index files for kernel packages into 'kernel.org' hashget project.
-
-*Hashget packs this into 8 Mb in 28 seconds (on my Core i5 computer) vs 426Mb in 48 seconds with plain tar -czf. 
-(And 3 minutes with hashget/tar/gz vs 4 minutes with tar on slower notebook). Hashget packs faster and often 
-much more effective.*
 
 If you will make `hashget-admin --status` you will see kernel.org project. `hashget-admin --list -p PROJECT` will 
 show content of project:

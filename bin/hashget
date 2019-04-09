@@ -305,9 +305,6 @@ def index(hashdb, path, anchors, filesz=10000, heuristics=None):
 
             srlist = heur.process(filename)
 
-            if(srlist):
-                print("Got {} submit requests".format(len(srlist)))
-
             for sr in srlist:
 
                 total += 1
