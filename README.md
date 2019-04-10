@@ -21,7 +21,7 @@ before packing.
 |Debian 9 (LAMP) LXC VM | 724 Mb         | 165 Mb ( 23% ) | 4.1 Mb ( **0.5%** )     |
 
 Unpacked size measured with `du -sh` command. Ratio calculated as `dh -shb compressed.tar.gz` / `du -shb original-dir` 
-in percents.
+in percents. Debian filesystem was clean and packed without temporary files (see example below).
 
 ## Installation
 
@@ -59,12 +59,8 @@ STEP 3/3 tarring...
 . (38.1M) packed into /tmp/wordpress-hashget.tar.gz (154.7K)
 ```
 
-`-f` to give filename, `-z` to gzip it, `--pack .` which directory to pack and `--hashserver` without value disables 
+`-f` to specify filename, `-z` to gzip it, `--pack .` commands which directory to pack and `--hashserver` without value disables 
 remote hashservers.
-
-You can create simple .tar.gz archive with `tar -czf /tmp/wordpress.tar.gz .` and compare size (11M vs 154K for me).
-If you would not `--submit` file or  delete index file: `hashget-admin --purge --hp wordpress-5.1.1.zip` and make
-hashget archive again, it  will have approximately same size as simple .tar.gz.
 
 You can check local indexes HashDB with [hashget-admin](https://gitlab.com/yaroslaff/hashget/wikis/hashget-admin) 
 utility.
@@ -109,39 +105,6 @@ STEP 3/3 tarring...
 `--exclude` directive tells hashget and tar to skip some directories which are not necessary in backup. 
 (You can omit it, backup will be larger)
 
-Now lets compare results with usual tarring
-```shell
-du -sh /var/lib/lxc/mydebvm/rootfs/
-724M	/var/lib/lxc/mydebvm/rootfs/
-
-tar -czf /tmp/mydebvm-orig.tar.gz  --exclude=var/cache/apt \
-    --exclude=var/lib/apt/lists -C /var/lib/lxc/mydebvm/rootfs/ .
-
-ls -lh mydebvm*
--rw-r--r-- 1 root root 165M Mar 29 00:27 mydebvm-orig.tar.gz
--rw-r--r-- 1 root root 4.1M Mar 29 00:24 mydebvm.tar.gz
-```
-Optimized backup is 40 times smaller!
-
-### Decompressing
-
-Untarring:
-```shell
-mkdir rootfs
-tar -xzf mydebvm.tar.gz -C rootfs
-du -sh rootfs/
-145M	rootfs/
-```
-
-After untarring, we have just 130 Mb. Now, get all the missing files with hashget:
-```shell
-hashget -u rootfs/
-Recovered 8534/8534 files 450.0M bytes (49.9M downloaded, 49.1M cached) in 242.68s
-```
-(you can run with -v for verbosity)
-
-Now we have fully working debian system. Some files are still missing (e.g. APT list files in /var/lib/apt/lists, 
-which we **explicitly** --exclude'd. Hashget didn't misses anything on it's own) but can be created with 'apt update' command.
 
 ### Hint files
 If our package is indexed (like we just did with wordpress) it will be very effectively deduplicated on packing.
@@ -167,7 +130,7 @@ if you want it to be hidden) in /tmp/test with this content:
 
 And now try compress it again:
 ```shell
-hashget --pack /tmp/test -zf /tmp/test.tar.gz
+$ hashget --pack /tmp/test -zf /tmp/test.tar.gz
 STEP 1/3 Indexing...
 submitting https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
 STEP 2/3 prepare exclude list for packing...
@@ -184,7 +147,8 @@ This is much more simple way then writing plugin.
 
 ### Heuristic plugins
 Heuristics are small plugins (installed when you did `pip3 install hashget[plugins]`, or can be installed separately)
-which can auto-detect some non-indexed files which could be indexed.
+which can auto-detect some non-indexed files which could be indexed. You already know build-in heuristics for Debian 
+and hint files, but hashget could be extended with third-party plugins.
 
 Lets try test with linux kernel sources package (100Mb+):
 
