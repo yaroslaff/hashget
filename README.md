@@ -1,19 +1,27 @@
 # hashget
 
-*You do not need to bear the cost to store files which you can download*
+Hashget is network *deduplication* tool working together with usual compression utilities (such as tar/gz/xz).  
 
-Hashget is network deduplication tool developed mainly for archiving (backup) debian virtual machines (mostly), but 
-could be used for other backups too. For example, it's very useful for backup LXC containers 
-before uploading to Amazon Glacier. 
-
-Upon compressing, hashget replaces *indexed static files* (which could be downloaded by static URL) 
-to it's hashes and URLs. This can compress 600Mb debian root filesystem with mysql, apache and other software to just 4Mb !
+While usual compression tools uses mathematical algorithms for compressing data, hashget finds which files could be 
+downloaded from public (e.g. WordPress or Debian servers) or private (e.g. your company internal website) resources and 
+excludes it from archive (leaving only very short meta-information about it).
 
 Upon decompressing, hashget downloads these files, verifies hashsum and places it on target system with same 
 permissions, ownership, atime and mtime.
 
-Hashget archive (in contrast to incremental and differential archive) is 'self-sufficient in same world' 
-(where Debian or Linux kernel projects are still alive). 
+Hashget compression is lossless. If some files are changed, it will be kept as-is (not replaced by original vendor 
+files). After restored from archive it will have same files and each file will have same content as it was 
+before packing.
+
+## Effectiveness
+|Data sample            | unpacked size  |.tar.gz         | hashget .tar.gz         | 
+|----                   |----            |----            |----                     |
+|Wordpress-5.1.1        | 43 Mb          | 11 Mb ( 26% )  | 155 Kb ( **0.3%** )     |
+|Linux kernel  5.0.4    | 934 Mb         | 161 Mb ( 20% ) | 4.7 Mb ( **0.5%** )     |
+|Debian 9 (LAMP) LXC VM | 724 Mb         | 165 Mb ( 23% ) | 4.1 Mb ( **0.5%** )     |
+
+Unpacked size measured with `du -sh` command. Ratio calculated as `dh -shb compressed.tar.gz` / `du -shb original-dir` 
+in percents.
 
 ## Installation
 
@@ -27,11 +35,61 @@ or clone from git:
 git clone https://gitlab.com/yaroslaff/hashget.git
 ```
 
-
 ## QuickStart
 
-### Compressing
+### Compressing (manual indexing)
+```shell
+# prepare test data
+$ mkdir -p /tmp/test/wp
+$ cd /tmp
+$ wget https://wordpress.org/wordpress-5.1.1.zip 
+$ cd /tmp/test/wp
+$ unzip -q /tmp/wordpress-5.1.1.zip
 
+# index data
+$ hashget --submit https://wordpress.org/wordpress-5.1.1.zip -p my --hashserver
+
+# pack
+$ hashget -zf /tmp/wordpress-hashget.tar.gz --pack . --hashserver
+STEP 1/3 Indexing...
+Indexing done in 0.07s. 0 local + 0 pulled + 0 new = 0 total packages
+STEP 2/3 prepare exclude list for packing...
+saved: 1373 files, 1 pkgs, size: 37.9M. Download: 11.0M
+STEP 3/3 tarring...
+. (38.1M) packed into /tmp/wordpress-hashget.tar.gz (154.7K)
+```
+
+`-f` to give filename, `-z` to gzip it, `--pack .` which directory to pack and `--hashserver` without value disables 
+remote hashservers.
+
+You can create simple .tar.gz archive with `tar -czf /tmp/wordpress.tar.gz .` and compare size (11M vs 154K for me).
+Also, you can delete index file: `hashget-admin --purge --hp wordpress-5.1.1.zip` and create hashget archive again, it 
+will have approximately same size as simple .tar.gz.
+
+You can check local indexes HashDB with [hashget-admin](https://gitlab.com/yaroslaff/hashget/wikis/hashget-admin) 
+utility.
+
+### Decompressing 
+
+Unpack .tar.gz and then `hashget -u` that directory (which has hidden file .hashget-restore.json).
+
+```shell
+$ mkdir /tmp/test/wp-unpacked
+$ cd /tmp/test/wp-unpacked
+$ tar -xzf /tmp/wordpress-hashget.tar.gz
+$ hashget -u . --hashserver
+Recovered 1373/1373 files 37.9M bytes (0 downloaded, 11.0M cached) in 6.13s
+```
+
+You can delete .hashget-restore.json file after this if you want. Now /tmp/test/wp-unpacked restored from tiny 150K 
+hashget archive is same as /tmp/test/wp.
+
+> Manual indexing is easy way to optimize packing of individual large packages.
+
+## Advanced
+
+
+### Debian VM compressing (built-in plugin)
 Compressing [test machine](https://gitlab.com/yaroslaff/hashget/wikis/Test-machine): 
 
 (Since it requires access to VM filesystem, run as user root or use sudo)
@@ -84,81 +142,6 @@ Recovered 8534/8534 files 450.0M bytes (49.9M downloaded, 49.1M cached) in 242.6
 
 Now we have fully working debian system. Some files are still missing (e.g. APT list files in /var/lib/apt/lists, 
 which we **explicitly** --exclude'd. Hashget didn't misses anything on it's own) but can be created with 'apt update' command.
-
-## Advanced
-
-### Manually indexing files to local HashDB
-Lets make test directory with wordpress for packing.
-
-```shell
-mkdir /tmp/test
-cd /tmp/test/
-wget -q https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
-unzip wordpress-5.1.1-ru_RU.zip 
-Archive:  wordpress-5.1.1-ru_RU.zip
-   creating: wordpress/
-  inflating: wordpress/wp-login.php  
-  inflating: wordpress/wp-cron.php   
-....
-du -sh .
-57M	.
-```
-
-and now we will pack it:
-```shell
-hashget --pack /tmp/test/ -zf /tmp/test.tar.gz
-STEP 1/3 Indexing...
-STEP 2/3 prepare exclude list for packing...
-saved: 4 files, 3 pkgs, size: 104.6K. Download: 3.8M
-STEP 3/3 tarring...
-/tmp/test/ (52.3M) packed into /tmp/test.tar.gz (22.1M)
-```
-
-Thats same result as usual tar would do. Only ~100K saved (you can see it in .hashget-restore.json file, there are
-usual license files). Still ok, but not as impressive as before. Lets fix miracle and make it impressive again!
-
-We will index this WordPress version, and it will be compressed very effectively.
-```shell
-hashget -p my --submit https://ru.wordpress.org/wordpress-5.1.1-ru_RU.zip
-hashget --pack /tmp/test/ -zf /tmp/test.tar.gz
-STEP 1/3 Indexing...
-STEP 2/3 prepare exclude list for packing...
-saved: 1396 files, 1 pkgs, size: 52.2M. Download: 11.7M
-STEP 3/3 tarring...
-/tmp/test/ (52.3M) packed into /tmp/test.tar.gz (157.9K)
-```
-50M packed into 150K. Very good! What other archiver can make such great compression? (300+ times smaller!)
-
-We can look our project details:
-```shell
-hashget-admin --status -p my
-my DirHashDB(path:/var/cache/hashget/hashdb/my stor:basename pkgtype:generic packages:0)
-  size: 119.4K
-  packages: 1
-  first crawled: 2019-04-01 01:45:45
-  last_crawled: 2019-04-01 01:45:45
-  files: 1395
-  anchors: 72
-  packages size: 11.7M
-  files size: 40.7M
-  indexed size: 40.5M (99.61%)
-  noanchor packages: 0
-  noanchor size: 0
-  no anchor link: 0
-  bad anchor link: 0
-```
-It takes just 100K on disk, has 1 package indexed (11.7M), over 1395 total files. You can clean HashDB, but usually 
-it's not needed, because HashDB is very small. You can get list of indexes in project with `hashget-admin --list -p my`
-
-And one important thing - hashget archiving keeps all your changes! If you will make any changes in data, e.g.:
-```shell
-echo zzz >> wordpress/index.php
-```
-and --pack it, it will be just little bigger (158K for me instead of 157.9) but will keep your changed file as-is.
-Modified file has other hashsum, so it will be .tar.gz'ipped and not recovered from wordpress archive as other 
-wordpress files.
-
-> Manual indexing is easy way to optimize packing of individual large packages.
 
 ### Hint files
 If our package is indexed (like we just did with wordpress) it will be very effectively deduplicated on packing.

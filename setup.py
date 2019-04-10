@@ -26,7 +26,7 @@ def read(fname):
 setup(
     name='hashget',
     version=vermod.__version__,
-    packages=['hashget', 'hashget.heuristics.hint'],
+    packages=['hashget', 'hashget.heuristics.hint', 'hashget.heuristics.debian'],
     scripts=['bin/hashget', 'bin/hashget-admin'],
 
     install_requires=['patool','filetype','filelock','setuptools', 'requests'],
@@ -54,7 +54,6 @@ setup(
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
-        'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',
     ],
 )

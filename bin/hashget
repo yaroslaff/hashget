@@ -264,10 +264,12 @@ def get_by_hashspec(hashdb, hashspec, outdir):
     """
 
     try:
-        hp = hashdb.hash2hp(hashspec)
+        hplist = hashdb.hash2hp(hashspec)
     except KeyError:
         log.error("{} not found in hashdb".format(hashspec))
         return
+
+    hp = hplist[0]
 
     p = hashget.package.Package(url=hp.url, log=log)
     p.download()
@@ -278,6 +280,9 @@ def get_by_hashspec(hashdb, hashspec, outdir):
         return dst
 
     src = p.hash2path(hashspec)
+    if src is None:
+        log.error('Not found {} in {}. Try --recursive'.format(hashspec, p.url))
+        return
     dst = os.path.join(outdir, os.path.basename(src))
     shutil.copy(src, dst)
     p.cleanup() 

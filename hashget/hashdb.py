@@ -232,7 +232,7 @@ class DirHashDB(HashDB):
 
     def hash2hp(self, hashspec):
         """
-        return hashpackage by hashspec of package or any indexed file in it
+        return LIST of hashpackages by hashspec of package or any indexed file in it
         :param hashspec:
         :return:
         """
