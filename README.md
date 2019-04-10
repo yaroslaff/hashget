@@ -63,8 +63,8 @@ STEP 3/3 tarring...
 remote hashservers.
 
 You can create simple .tar.gz archive with `tar -czf /tmp/wordpress.tar.gz .` and compare size (11M vs 154K for me).
-Also, you can delete index file: `hashget-admin --purge --hp wordpress-5.1.1.zip` and create hashget archive again, it 
-will have approximately same size as simple .tar.gz.
+If you would not `--submit` file or  delete index file: `hashget-admin --purge --hp wordpress-5.1.1.zip` and make
+hashget archive again, it  will have approximately same size as simple .tar.gz.
 
 You can check local indexes HashDB with [hashget-admin](https://gitlab.com/yaroslaff/hashget/wikis/hashget-admin) 
 utility.
