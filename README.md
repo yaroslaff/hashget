@@ -105,6 +105,16 @@ STEP 3/3 tarring...
 `--exclude` directive tells hashget and tar to skip some directories which are not necessary in backup. 
 (You can omit it, backup will be larger)
 
+Built-in debian plugin automatically discovers installed debian packages, downloads index files from hashserver 
+(to speed-up indexing) or download packages and index itself (if not found on hashserver). HashPackages (indexes) are 
+stored in local hashdb, so next time you will pack this directory, it will not download and index same data again and 
+will work much faster.
+
+For each package hashget archive will store link to [snapshot.debian.org](https://snapshot.debian.org) in restore-file.
+snapshot links are permanent and works since 2010. Unfortunately, other deb/apt based linux distributions do not have 
+such snapshots, so this method is very effective only for Debian. 
+You may [disable this heuristic](https://gitlab.com/yaroslaff/hashget/wikis/Disable%20heuristics%20and%20HashDB) 
+when packing other OS.
 
 ### Hint files
 If our package is indexed (like we just did with wordpress) it will be very effectively deduplicated on packing.
