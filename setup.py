@@ -37,7 +37,7 @@ setup(
     long_description=read('README.md'),
     long_description_content_type='text/markdown',
     author_email='yaroslaff@gmail.com',
-    description='hashget deduplication and compression tool',
+    description='deduplication tool for archiving data with extremely high ratio',
 
     extras_require={
         'plugins': ["hashget-kernel_org"],
