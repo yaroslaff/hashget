@@ -249,7 +249,7 @@ adduser_3.115_all.deb                                  liblz4-1_0.0~r131-2+b1_am
 apache2-bin_2.4.25-3+deb9u6_amd64.deb                  liblzma5_5.2.2-1.2+b1_amd64.deb
 ...
 
-# Now packages are taken in pool
+# Now packages are taken from pool
 $ hashget -u . --pool /tmp/pool
 ...
 Recovered 8534/8534 files 450.0M bytes (0 downloaded, 98.7M from pool, 0 cached) in 146.92s

@@ -17,11 +17,12 @@ from hashget.exceptions import HashPackageExists
 from hashget.utils import kmgt, fix_hpspec
 from hashget.filepool import DirFilePool
 
+
 def build_pool(pooldir, webroot):
     pool = DirFilePool(pooldir)
     for path in pool.pool_files():
 
-        f = hashget.file.File(file)
+        f = hashget.file.File(path)
 
         subpath = pool.hashspec2subpath(f.hashspec)
         linkpath = os.path.join(webroot, subpath)
