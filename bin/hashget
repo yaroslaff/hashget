@@ -22,22 +22,19 @@ import time
 import logging
 import shutil
 import tempfile
-import subprocess
 
 # from requests.packages.urllib3.util.retry import Retry
 # from requests.adapters import HTTPAdapter
 
 import hashget
 import hashget.hashdb
-from hashget.submiturl import submit_url
+import hashget.filepool
 
 from hashget.utils import kmgt
 import hashget.utils
 import hashget.globlist
-from hashget.restorefile import RestoreFile
-from hashget.singlelist import SingleList
-from hashget.heuristic_base import HeuristicSet
 from hashget.debian import debsubmit
+import hashget.operations
 
 BUF_SIZE = 1024*1024
 
@@ -76,168 +73,7 @@ def deb2url(root, project, basename):
     file_url = urllib.parse.urljoin(project_url, namepath)
     return file_url
 
-#
-# Prepare
-#
 
-
-def prepare(root, hashdb, anchors, filesz, skip, excludefile, restorefile=None, pull=True):
-    """
-        ANCHORS ??? do we need it here? maybe delete?
-    """
-
-    restorefile = restorefile or os.path.join(root, '.hashget-restore.json')
-
-    files = prepare_readfiles(root, anchors, filesz, skip)
-
-    if pull:
-        for a in anchors.anchorlist:
-            pullanchor = hashdb.pull_anchor(a.get_hashspec())
-            log.debug('pull anchor for {} {}: {}'.format(a.filename, kmgt(a.size), pullanchor))
-
-
-    ph2url = dict()  # package hashes to URLs
-    rfile = RestoreFile()
-    sl = SingleList()
-    hpd = dict()
-
-    with open(excludefile, 'wb') as excf:
-        for f in files:
-            try:
-                """
-                    save url and package hashes, then write to snf
-                    write file info to snf
-                """
-                hplist = hashdb.hash2hp(f.hashspec, remote=False)
-
-                sl.add([hp.hashspec for hp in hplist])
-
-                for hp in hplist:
-                    hpd[hp.hashspec] = hp
-
-
-
-
-                relpath = os.path.relpath(f.filename, root)
-                line = os.fsencode(u"./{}\n".format(os.path.relpath(f.filename, root)))
-                #excf.write(line)
-                excf.write(os.fsencode("./{}\n".format(os.path.relpath(f.filename, root))))
-                rfile.add_file(f)
-
-            except KeyError:
-                # unique file, not found in any packages
-                pass
-
-        for hashspec in sl.optimized():
-            hp = hpd[hashspec]
-            rfile.add_package(hp.url, hashspec=hashspec, size = hp.attrs.get('size', None))
-
-        rfile.save(restorefile)
-    log.info("saved: {}".format(rfile))
-
-    log.debug(hashdb)
-
-    # guess_packages(root, files)
-
-
-def prepare_readfiles(root, anchors, filesz, skip):
-
-    total = 0
-    files = list()
-
-    for directory, subdirs, dirfiles in os.walk(root):
-    
-        #if skipdir(directory, skipdirs):
-        #    continue
-
-        for basename in dirfiles:
-            total += 1
-            path = os.path.join(directory, basename)                        
-
-            if path in skip:
-                log.debug("SKIP {}".format(path))
-                continue
-
-            if os.path.islink(path) or not os.path.isfile(path):
-                continue
-            
-            f = hashget.file.File(path, root=root)
-            if f.size > filesz:
-                files.append(f)
-            anchors.check_append(f)
-
-            # if f.size > 100*1024:
-            #     anchors.append(f)
-
-    # sort anchors
-    # files = hashget.FileList(sorted(files, key = lambda k: getattr(k,'size'), reverse=True))
-    
-    return files
-    
-
-#
-# PostUnpack
-#
-def postunpack(root, usermode=False, recursive=False):
-    """
-        Restore files after untarring
-    """
-
-    rfile = hashget.restorefile.RestoreFile(os.path.join(root, '.hashget-restore.json'))
-    rfile.preiteration()
-
-    stat_cached = 0
-    stat_downloaded = 0
-    stat_recovered = 0
-    stat_files = 0
-    stat_ufiles = 0
-    started = time.time()
-
-    log.debug('downloading/unpacking packages...')
-
-    npackages = 0
-
-    for purl in rfile.packages_iter():
-
-        npackages += 1
-
-        log.debug('[{}/{}] restore from URL {}'.format(npackages, rfile.npackages(), purl))
-        p = hashget.package.Package(url=purl)
-        p.recursive = recursive
-        p.download()
-        p.unpack()
-        p.read_files()
-        
-        for pf in p.all_files():
-
-            hashspec = pf.get_hashspec()
-
-            if rfile.should_process(hashspec):
-                for rf in rfile.fbyhash(hashspec):
-                    log.debug('recovered {}: {}'.format(p.basename, rf.relpath()))
-                    rf.recover(pf.filename, usermode=usermode)
-                    rfile.set_processed(hashspec)
-                    stat_recovered += rf.size
-                    stat_files += 1
-
-        stat_cached += p.stat_cached
-        stat_downloaded += p.stat_downloaded
-        p.cleanup()                        
-
-    nfiles = rfile.get_nfiles()
-
-    print('Recovered {}/{} files {} bytes ({} downloaded, {} cached) in {:.2f}s'.format(
-            stat_files, nfiles,
-            kmgt(stat_recovered),
-            kmgt(stat_downloaded),
-            kmgt(stat_cached),
-            time.time() - started
-        ))
-
-    stat_files -= 1
-
-    rfile.check_processed()
-    # delete tmpdir
 
 
 def get_by_sig(hashdb, sigtype, sig, outdir=None):
@@ -263,9 +99,8 @@ def get_by_hashspec(hashdb, hashspec, outdir):
     :return:
     """
 
-    try:
-        hplist = hashdb.hash2hp(hashspec)
-    except KeyError:
+    hplist = hashdb.hash2hp(hashspec)
+    if not hplist:
         log.error("{} not found in hashdb".format(hashspec))
         return
 
@@ -288,50 +123,6 @@ def get_by_hashspec(hashdb, hashspec, outdir):
     p.cleanup() 
     log.info(dst)
 
-def index(hashdb, path, anchors, filesz=10000, heuristics=None):
-
-    if heuristics is None:
-        heuristics = list(['all'])
-
-    heur = HeuristicSet(hashdb=hashdb, heuristics=heuristics)
-
-    total = 0
-    local = 0
-    pulled = 0
-    new = 0
-
-    started = time.time()
-
-    for dir, subdirs, files in os.walk(path):
-        for basename in files:
-            filename = os.path.join(dir, basename)
-            if os.path.islink(filename):
-                continue
-
-            srlist = heur.process(filename)
-
-            for sr in srlist:
-
-                total += 1
-
-                if sr.sig_present():
-                    log.debug("local {}".format(sr.first_sig()[1]))
-                    local += 1
-                    continue
-
-                if sr.pull_sig():
-                    log.info("pulled {}".format(sr.first_sig()[1]))
-                    pulled += 1
-                    continue
-
-                log.info("submitting {}".format(sr.url))
-                sr.submit()
-                new += 1
-
-    log.info('Indexing done in {:.2f}s. {} local + {} pulled + {} new = {} total packages'.format(
-        time.time() - started,
-        local, pulled, new, total))
-
 def main():
 
     global log
@@ -350,6 +141,7 @@ def main():
     def_target = 'auto'
     def_heuristics = ['all']
     def_hashdb = ['all']
+    def_pool = os.getenv('HASHGET_POOL', None)
 
     # default path
     if os.getuid() == 0:
@@ -377,7 +169,7 @@ def main():
     g.add_argument('--index', default=None, metavar='DIR', help='index files in DIR')
     g.add_argument('--debsubmit', default=None, metavar='package.deb', help='submit local .deb file')
 
-    g = parser.add_argument_group('Crawling options')
+    g = parser.add_argument_group('Indexing options')
     g.add_argument('--anchsz', type=int, default=def_anchsz, help='min size of anchors ({})'.format(def_anchsz))
     g.add_argument('--filesz', type=int, default=def_filesz, help='min size of files ({})'.format(def_filesz))
     g.add_argument('--project', '-p', default=def_project, help='project name ({})'.format(def_project))
@@ -404,6 +196,7 @@ def main():
     g.add_argument('--recursive', default=False, action='store_true', help='recursive unpacking (slower).')
     g.add_argument('-z', default=False, action='store_true', help='gzip tarred archive')
     g.add_argument('--sig', nargs='+', default=list(), metavar='SIG', help='Signature for --submit. format: SIGTYPE:SIGNATURE')
+    g.add_argument('--pool', default=def_pool, metavar='PATH', help='Pool with package files ({})'.format(def_pool))
 
 
     g = parser.add_argument_group('Target directory specification')
@@ -447,6 +240,14 @@ def main():
         fh.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
         log.addHandler(fh)
 
+    if(args.pool):
+        if args.pool.startswith('http://') or args.pool.startswith('https://'):
+            pool = hashget.filepool.HttpFilePool(url=args.pool)
+        else:
+            pool = hashget.filepool.DirFilePool(path=args.pool)
+    else:
+        pool = hashget.filepool.NullFilePool()
+
     hashdb = hashget.hashdb.HashDBClient(path=args.hashdb_path, enabled_hashdb=args.hashdb)
 
     anchors = hashget.AnchorList(args.anchsz)
@@ -462,7 +263,14 @@ def main():
     hashget.package.opt_recursive = args.recursive
 
     if args.index:
-        index(hashdb=hashdb, path=args.index, anchors=anchors, filesz=args.filesz, heuristics=args.heuristics)
+        hashget.operations.index(
+            hashdb=hashdb,
+            root=args.index,
+            anchors=anchors,
+            filesz=args.filesz,
+            heuristics=args.heuristics,
+            pool=pool,
+            pull=args.pull)
 
     if args.prepack:
 
@@ -477,7 +285,7 @@ def main():
         else:
             excludefile = args.excludefile
 
-        prepare(path,
+        hashget.operations.prepare(path,
                 hashdb=hashdb,
                 anchors=anchors,
                 filesz=args.filesz,
@@ -487,7 +295,8 @@ def main():
                 )
 
     if args.postunpack:
-        postunpack(args.postunpack, usermode=args.user, recursive=args.recursive)
+        hashget.operations.postunpack(
+            args.postunpack, usermode=args.user, recursive=args.recursive, pool=pool)
 
     if args.get:
         if args.get.startswith('sha256:'):
@@ -517,90 +326,25 @@ def main():
             project=args.project,
             anchors=anchors,
             signatures=signatures,
-            filesz=args.filesz)
+            filesz=args.filesz,
+            pool=pool)
 
     if args.debsubmit:
         debsubmit(hashdb, args.debsubmit, anchors)
 
     if args.pack:
-        path = args.pack
+        hashget.operations.pack(
+            hashdb=hashdb,
+            root=args.pack,
+            file=args.file,
+            zip = args.z,
+            exclude=args.exclude,
+            skip=args.skip,
+            anchors=anchors,
+            filesz=args.filesz,
+            heuristics=args.heuristics,
+            pool=pool,
+            pull=args.pull)
 
-        nsteps=3
-        step=1
-
-        if not args.file:
-            log.error('Need -f argument for --pack')
-            sys.exit(1)
-
-        # fix args exclude
-        excludelist = list()
-        for epath in args.exclude:
-            if epath.endswith('/'):
-                excludelist.append(epath+'*')
-                log.warning('fixed --exclude {} to {}'.format(epath, epath+'*'))
-            else:
-                excludelist.append(epath)
-
-        gl = hashget.globlist.GlobList(root=path)
-        for skip in args.skip + args.exclude:
-            gl.add_relpath(skip)
-
-
-        #
-        # STEP 1
-        #
-
-        log.info("STEP {}/{} Indexing...".format(step, nsteps))
-        index(hashdb=hashdb, path=path, anchors=anchors, filesz=args.filesz, heuristics=args.heuristics)
-        step += 1
-
-        log.info('STEP {}/{} prepare exclude list for packing...'.format(step, nsteps))
-
-        tmpdir = tempfile.mkdtemp(prefix='hashget-pack-')
-        excludefile = os.path.join(tmpdir, '.hashget-exclude')
-        restorefile = os.path.join(tmpdir, '.hashget-restore.json')
-
-        prepare(path,
-                hashdb=hashdb,
-                anchors=anchors,
-                filesz=args.filesz,
-                skip=gl,
-                excludefile=excludefile,
-                restorefile=restorefile,
-                pull=args.pull
-                )
-
-        step += 1
-
-
-        log.info('STEP {}/{} tarring...'.format(step, nsteps))
-
-        cmd = ['tar', '-c']
-
-        if args.z:
-            cmd.append('-z')
-
-        if args.file:
-            cmd.extend(['-f', args.file])
-
-        cmd.extend(['-X', excludefile])
-        for exc_path in excludelist:
-            cmd.extend(['--exclude', exc_path])
-
-        cmd.extend(['-C', path, '.'])
-        cmd.extend(['-C', tmpdir, '.hashget-restore.json'])
-
-        log.debug('Run: {}'.format(cmd))
-
-        subprocess.run(cmd)
-
-        # clean up
-        os.unlink(excludefile)
-        os.unlink(restorefile)
-        os.rmdir(tmpdir)
-
-        if args.file:
-            statinfo = os.stat(args.file)
-            log.info('{} ({}) packed into {} ({})'.format(path, kmgt(hashget.utils.dir_size(path)), args.file, kmgt(statinfo.st_size)))
-
-main()
+if __name__ == '__main__':
+    main()

@@ -220,6 +220,41 @@ https://wordpress.org/wordpress-5.1.1.zip but you should not index https://wordp
 ### Differential and incremental backups
 See [Incremental backups](https://gitlab.com/yaroslaff/hashget/wikis/incremental) chapter in wiki doc.
 
+### Using local file pool
+It's possible to use local or remote (e.g. on Intranet HTTP server) file pool. This can help to unpack archives even 
+when original server is not available. 
+
+Pool populated automatically if --pool given to certain operations (`--submit`, `--index`, `--pack`, `--postunpack`/`-u`):
+
+For example:
+~~~
+$ mkdir /tmp/pool
+$ hashget --submit https://wordpress.org/wordpress-5.1.1.zip --pool /tmp/pool/ -p my
+$ ls /tmp/pool
+wordpress-5.1.1.zip
+~~~
+When doing `--postunpack` (`-u`) with `--pool`, hashget will read files from pool, and write it there (if file 
+was not found in pool and downloaded, it will be saved to pool).
+
+
+~~~
+# Empty pool 
+$ hashget -u . --pool /tmp/pool
+...
+Recovered 8534/8534 files 450.0M bytes (0 downloaded, 0 from pool, 98.7M cached) in 155.92s
+
+# Pool populated now
+$ LANG=C ls /tmp/pool
+adduser_3.115_all.deb                                  liblz4-1_0.0~r131-2+b1_amd64.deb
+apache2-bin_2.4.25-3+deb9u6_amd64.deb                  liblzma5_5.2.2-1.2+b1_amd64.deb
+...
+
+# Now packages are taken in pool
+$ hashget -u . --pool /tmp/pool
+...
+Recovered 8534/8534 files 450.0M bytes (0 downloaded, 98.7M from pool, 0 cached) in 146.92s
+~~~
+
 # Documentation
 For more detailed documentation see [Wiki](https://gitlab.com/yaroslaff/hashget/wikis/home).
 

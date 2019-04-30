@@ -6,7 +6,8 @@ import hashget.anchor
 
 log = logging.getLogger('hashget')
 
-def submit_url(url, project, anchors=None, filesz=1024, hashdb=None, file=None, signatures=None, pkgtype=None, attrs=None):
+def submit_url(url, project, anchors=None, filesz=None, hashdb=None, file=None, signatures=None,
+               pkgtype=None, attrs=None, pool=None):
     """
     function interface
 
@@ -17,13 +18,15 @@ def submit_url(url, project, anchors=None, filesz=1024, hashdb=None, file=None, 
     :param hashdb: HashDBClient where to save it
     :param file: if given, package will not be downloaded, but taken from this file
     :param signatures: additional signatures (e.g. 'deb')
-    :param attrs: addtional attributes such as size, date of hashing etc.
+    :param attrs: additional attributes such as size, date of hashing etc.
     :return:
     """
 
     anchors = anchors or hashget.anchor.AnchorList()
+    filesz = filesz or 1024
 
     hdb = hashdb.ensure_project(project, pkgtype=pkgtype)
+    assert(hdb is not None)
 
     hpclass = hdb.hpclass
 
@@ -63,10 +66,16 @@ def submit_url(url, project, anchors=None, filesz=1024, hashdb=None, file=None, 
     )
 
     hp.set_attr('size', p.package_size)
+    hp.set_attr('filesz', filesz)
+    hp.set_attr('anchorsz', anchors.minsz)
     hp.set_attr('sum_size', p.sum_size)
     hp.set_attr('indexed_size', indexed_size)
     hp.set_attr('crawled_date', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     hashdb.submit_save(hp, project=project, file=p.path)
+
+    if pool is not None:
+        pool.append(p.path)
+
     return hp
 

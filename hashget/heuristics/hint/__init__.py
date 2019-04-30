@@ -13,7 +13,6 @@ class HintHeuristic(BaseHeuristic):
 
     def check(self, path):
         basename = os.path.basename(path)
-        dirname = os.path.dirname(path)
 
         if basename not in self.basenames:
             return list()

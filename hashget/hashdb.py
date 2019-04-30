@@ -52,18 +52,21 @@ class DirHashDB(HashDB):
                 # usual user
                 self.path = os.path.expanduser("~/.hashget/hashdb") 
 
-        self.__config = dict()
+        self._config = dict()
 
         self.packages = list()
 
         # package or file Hash to hp
-        self.__h2hp = dict()
-        
+        self._h2hp = dict()
+
+        # only loaded packages hashes (one hashspec per package)
+        self._loaded_packages = list()
+
         # File Hash to Package Hash
         # self.fh2hp = dict()
 
         # Signature to Package Hash
-        self.__sig2hash = dict()
+        self._sig2hash = dict()
 
         self.loaded = False
 
@@ -72,47 +75,52 @@ class DirHashDB(HashDB):
         if load:
             self.load()
 
+
     @property
     def storage(self):
-        return self.__config.get('storage', 'basename')
+        return self._config.get('storage', 'basename')
 
     @storage.setter
     def storage(self, value):
         if value in ['basename', 'hash2', 'hash3']:
-            self.__config['storage'] = value
+            self._config['storage'] = value
         else:
             raise ValueError('Wrong storage type "{}"'.format(value))
 
     @property
+    def name(self):
+        return os.path.basename(self.path)
+
+    @property
     def pkgtype(self):
-        return self.__config.get('pkgtype', 'generic')
+        return self._config.get('pkgtype', 'generic')
 
     @pkgtype.setter
     def pkgtype(self, value):
         if value in ['generic', 'debsnap']:
-            self.__config['pkgtype'] = value
+            self._config['pkgtype'] = value
         else:
             raise ValueError('Wrong pkgtype "{}"'.format(value))
 
     def read_config(self):
-        self.__config = {'storage': 'basename', 'pkgtype': 'generic'}
+        self._config = {'storage': 'basename', 'pkgtype': 'generic'}
 
         try:
             with open(os.path.join(self.path, '.options.json')) as f:
                 conf = json.load(f)
             for k, v in conf.items():
-                self.__config[k] = v
+                self._config[k] = v
         except FileNotFoundError:
             pass
 
         # set default values
         for hpc in self.hpclass.__subclasses__():
-            if hpc.pkgtype == self.__config['pkgtype']:
+            if hpc.pkgtype == self._config['pkgtype']:
                 self.hpclass = hpc
 
     def write_config(self):
         with open(os.path.join(self.path, '.options.json'), 'w') as f:
-            json.dump(self.__config, f, indent=4)
+            json.dump(self._config, f, indent=4)
 
     def writehp(self, hp):
         """
@@ -160,7 +168,7 @@ class DirHashDB(HashDB):
         :return: filename
         """
 
-        storage = storage or self.__config['storage']
+        storage = storage or self._config['storage']
 
         hsum = hp.get_phash().split(':')[1]
 
@@ -177,30 +185,34 @@ class DirHashDB(HashDB):
 
     def package_files(self):
         """
-        yields each full path to each package file in DirHashDB
-        """
-        for root, dirs, files in os.walk(os.path.join(self.path, 'p')):
-            for basename in files:
-                path = os.path.join(root, basename)
-                if path != os.path.join(self.path, '.options'):
-                    yield path
-        return list()
-
-    def full_package_files(self):
-        """
-        yields each full path to each package file in DirHashDB
+        yields each relative path to each package file in DirHashDB
         """
         for root, dirs, files in os.walk(os.path.join(self.path, 'p')):
             for basename in files:
                 path = os.path.join(root, basename)
                 if path != os.path.join(self.path, '.options'):
                     yield os.path.join(self.path, path)
-        return list()
 
     def packages_iter(self):
-        for subpath in self.package_files():
-            hp = self.hpclass.load(path=os.path.join(self.path, subpath))
+        for path in self.package_files():
+            hp = self.hpclass.load(path=path)
+            hp.hashdb = self
             yield hp
+
+    def hplist(self, hpspec=None):
+        for hp in self.packages_iter():
+            if hpspec is None or hp.match_hpspec(hpspec):
+                yield hp
+
+    def hp1(self, hpspec=None):
+        """
+        Returns one first hashpackage
+        or IndexError
+        :param project:
+        :param hpspec:
+        :return:
+        """
+        return list(self.hplist(hpspec=hpspec))[0]
 
     def load(self):
         """
@@ -211,8 +223,8 @@ class DirHashDB(HashDB):
             # no hashdb
             return
 
-        for subpath in self.package_files():
-            hp = self.hpclass.load(path=os.path.join(self.path, subpath))
+        for path in self.package_files():
+            hp = self.hpclass.load(path=path)
             self.submit(hp)
 
         self.loaded = True
@@ -237,28 +249,42 @@ class DirHashDB(HashDB):
         :return:
         """
 
-        if hashspec in self.__h2hp:
-            return self.__h2hp[hashspec]
+        if hashspec in self._h2hp:
+            return self._h2hp[hashspec]
 
         raise KeyError('Hashspec {} not found neither in package hashes nor in file hashes'.format(hashspec))
 
     def sig_present(self, sigtype, sig):
-        return (sigtype in self.__sig2hash) and (sig in self.__sig2hash[sigtype])
+        return (sigtype in self._sig2hash) and (sig in self._sig2hash[sigtype])
 
     def __repr__(self):
         return 'DirHashDB(path:{} stor:{} pkgtype:{} packages:{})'.format(self.path, self.storage,
-                                                                          self.__config['pkgtype'], len(self.packages))
+                                                                          self._config['pkgtype'], len(self.packages))
 
     def dump(self):
         print("packages: {}".format(len(self.packages)))
+        ids_packages = [ id(x) for x in self.packages]
+
         for p in self.packages:
             print("  {}".format(p))
+        print(ids_packages)
+        print("_h2hp:", len(self._h2hp))
+        ids_ref = list()
+        for hsum, pkgs in self._h2hp.items():
+            for pkg in pkgs:
+                if not id(pkg) in ids_ref:
+                    ids_ref.append(id(pkg))
+        print(ids_ref)
 
     def __add_h2hp(self, hashspec, value):
-        if hashspec not in self.__h2hp:
-            self.__h2hp[hashspec] = list()
+        if hashspec not in self._h2hp:
+            self._h2hp[hashspec] = list()
 
-        self.__h2hp[hashspec].append(value)
+        if value in self._h2hp[hashspec]:
+            print("ERR", value, "already in _h2hp[", hashspec, "]")
+
+        assert(value not in self._h2hp[hashspec])
+        self._h2hp[hashspec].append(value)
 
     # DirHashDB.submit
     def submit(self, hp):
@@ -267,8 +293,16 @@ class DirHashDB(HashDB):
             (not saving to disk)
         """
 
-        self.packages.append(hp)
         phash = hp.hashspec
+        if phash in self._loaded_packages:
+            # delete old package
+            for old_hp in list(self._h2hp[phash]):
+                if old_hp.hashspec == phash:
+                    log.debug('delete old package with hashspec {}: {}'.format(old_hp.hashspec, old_hp))
+                    old_hp.delete()
+        assert(not phash in self._loaded_packages)
+
+        self.packages.append(hp)
 
         # add sum of package itself, for hash
         for hsum in hp.hashes:
@@ -279,9 +313,74 @@ class DirHashDB(HashDB):
 
         if hp.signatures:
             for sigtype, sig in hp.signatures.items():
-                if sigtype not in self.__sig2hash:
-                    self.__sig2hash[sigtype] = dict()
-                self.__sig2hash[sigtype][sig] = phash
+                if sigtype not in self._sig2hash:
+                    self._sig2hash[sigtype] = dict()
+                self._sig2hash[sigtype][sig] = phash
+
+        self._loaded_packages.append(phash)
+        hp.hashdb = self
+
+
+
+    def delete_by_hashspec(self, hashspec):
+
+        def filter_hplist(hplist, hashspec):
+            return [ hp for hp in hplist if hp.hashspec != hashspec ]
+
+        # self._h2hp = {k: v.remove(hp) for k, v in self._h2hp.items()}
+        del_hsum = list()
+
+        for hsum in self._h2hp:
+#            for hp in self._h2hp[hsum]:
+            self._h2hp[hsum] = filter_hplist(self._h2hp[hsum], hashspec)
+            if not self._h2hp[hsum]:
+                # empty list, delete it
+                if not hsum in del_hsum:
+                    del_hsum.append(hsum)
+            else:
+                # non empty list, some hashsum still exists (which belongs to other packages)
+                pass
+
+        for hsum in del_hsum:
+            del(self._h2hp[hsum])
+
+        for sigtype in self._sig2hash:
+            self._sig2hash[sigtype] = {k: v for k, v in self._sig2hash[sigtype].items() if v != hashspec}
+
+        self.packages = filter_hplist(self.packages, hashspec)
+        self._loaded_packages.remove(hashspec)
+
+    def __len__(self):
+        return len(self.packages)
+
+    def self_check(self):
+        error = False
+        for hsum, hplist in self._h2hp.items():
+            p = set(list([ hp.hashspec for hp in hplist ]))
+            if len(p) != len(hplist):
+                print("ERR HPLIST:", hplist)
+                print("   HASHSET:", p)
+                error = True
+
+        if error:
+            print("SELF CHECK FAIL")
+        else:
+            # print("SELF CHECK OK")
+            pass
+        return not error
+
+    def truncate(self):
+        """
+        delete all packages from this hashdb
+        :return:
+        """
+        self.packages = list()
+        self._h2hp = dict()
+        self._loaded_packages = list()
+        self._sig2hash = dict()
+        self.loaded = True
+        for path in self.package_files():
+            os.unlink(path)
 
 
 class HashServer:
@@ -341,7 +440,7 @@ class HashServer:
         r = requests.get(self.fhash2url(hashspec), headers=self.headers)
 
         if r.status_code != 200:
-            raise KeyError
+            return list()
 
         hp = HashPackage.load(data=r.json())
         return [hp]
@@ -499,6 +598,8 @@ class HashDBClient(HashDB):
             os.mkdir(project_path)
             self.hashdb[name] = DirHashDB(path=project_path)
             return self.hashdb[name]
+        else:
+            log.debug("project {}  already exists".format(name))
 
     def ensure_project(self, name, pkgtype=None):
         if name in self.hashdb:
@@ -612,6 +713,12 @@ class HashDBClient(HashDB):
         raise KeyError("Not found basename {} in any of hashdb: {}".format(basename, list(self.hashdb.keys())))
 
     def hash2hp(self, hspec, remote=True):
+        """
+
+        :param hspec:
+        :param remote:
+        :return: list of hashpackages (maybe empty)
+        """
 
         r = list()
 
@@ -626,14 +733,11 @@ class HashDBClient(HashDB):
                 hp = hs.hash2hp(hspec)
                 r.extend(hp)
 
-        if r:
-            return r
-
-        raise KeyError("Not found in any of {} hashdb".format(len(self.hashdb)))
+        return r
 
     def pull_anchor(self, hashspec):
         """
-        pull package by anchor (checks if it exists locally before pulling)
+        pull package from server by anchor (checks if it exists locally before pulling)
 
         :param hashspec: hash of anchor (sha256:aabbcc...)
         :return: None if already exists, True if pulled, False if missing on hashservers
@@ -658,6 +762,24 @@ class HashDBClient(HashDB):
             else:
                 self.submit_save(hp, '_cached')
                 return True
+
+    def hplist(self, project=None, hpspec=None):
+        for name, hdb in self.hashdb.items():
+            if project is None or name == project:
+                for hp in hdb.packages_iter():
+                    if hpspec is None or hp.match_hpspec(hpspec):
+                        yield hp
+
+    def hp1(self, project=None, hpspec=None):
+        """
+        Returns one first hashpackage
+        or raise IndexError
+        :param project:
+        :param hpspec:
+        :return:
+        """
+        return list(self.hplist(project=project, hpspec=hpspec))[0]
+
 
     def clean(self):
         log.warning('Clean {}'.format(self.path))

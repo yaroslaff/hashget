@@ -105,7 +105,7 @@ class DebPackage(object):
         for r in data['result']:
             if r['architecture'] == self.arch:
                 hashsum = r['hash']
-        
+
         url = prefix + 'file/' + hashsum + '/info'
         r = self.rsess.get(url)
         data = json.loads(r.text)

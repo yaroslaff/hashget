@@ -36,8 +36,11 @@ class HashPackage(object):
         self.hashes = hashes  # list of hashspec for package file itself
         self.attrs = attrs or dict()
         self.signatures = signatures
+        self.hashdb = None
 
-    def all_specs(self):
+        self.fix()
+
+    def UNUSED_all_specs(self):
         specs = list()
         specs.append(self.basename())
         specs.append(self.url)
@@ -55,6 +58,19 @@ class HashPackage(object):
     def set_attr(self, name, value):
         self.attrs[name] = value
 
+    def fix(self):
+        """
+        fix hp, transform it to nice unified format
+
+        anchors and files has no duplicates
+        :return:
+        """
+        if self.files:
+            self.files = list(set(self.files))
+
+        if self.anchors:
+            self.anchors = list(set(self.anchors))
+
     @classmethod
     def load(cls, path=None, stream=None, data=None):
         hp = cls()
@@ -71,12 +87,16 @@ class HashPackage(object):
 
         for name in data.keys():
             setattr(hp, name, data[name])
+
+        hp.fix()
+
         return hp
 
     def basename(self):
         return self.url.split('/')[-1]
 
     def __repr__(self):
+        # return "{} {} {}".format(self.basename(), id(self), self.hashspec)
         return "{} ({}/{})".format(self.basename(), len(self.anchors), len(self.files))
 
 
@@ -93,13 +113,16 @@ class HashPackage(object):
             if hspec.startswith('sha256:'):
                 return hspec
 
-    def json(self):
+    def dict(self):
         data = dict()
-
         for field in self.fields:
             data[field] = getattr(self, field)
+        return data
+
+    def json(self):
         # data['hashes'] = self.hashes.get_list()
-        return json.dumps(data, indent=4)
+        self.fix()
+        return json.dumps(self.dict(), indent=4)
 
     def get_special_anchors(self):
         return list()
@@ -138,10 +161,11 @@ class HashPackage(object):
                     log.debug("delete symlink {} to {}".format(path, self))
                     if os.path.islink(path):
                         os.unlink(path)
-
-        os.unlink(self.path)
+        self.delete()
 
     def delete(self):
+        if self.hashdb:
+            self.hashdb.delete_by_hashspec(self.hashspec)
         os.unlink(self.path)
 
     def verify(self):

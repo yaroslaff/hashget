@@ -1,4 +1,7 @@
 import re
+import logging
+
+log = logging.getLogger('hashget')
 
 
 class AnchorList(object):
@@ -40,6 +43,9 @@ class AnchorList(object):
 
     def clean_list(self):
         self.anchorlist = list()
+
+    def __len__(self):
+        return len(self.anchorlist)
 
     def __repr__(self):
         return 'AnchorList(minsz: {} {} re, {} anchors)'.format(self.minsz, len(self.re_list), len(self.anchorlist))

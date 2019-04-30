@@ -39,7 +39,7 @@ class RestoreFile(object):
 
     def packages_iter(self):
         for pdata in self.data['packages']:
-            yield pdata['url']
+            yield pdata
 
     def add_file(self, f):
         """

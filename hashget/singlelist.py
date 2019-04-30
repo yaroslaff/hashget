@@ -3,7 +3,11 @@ class SingleList():
         self.__list = list()
         self.__weights = dict()
 
+    def __repr__(self):
+        return("l:{} w:{}".format(len(self.__list), len(self.__weights)))
+
     def add(self, items):
+
         self.__list.append(items)
 
         for item in items:
@@ -14,6 +18,9 @@ class SingleList():
 
 
     def heaviest(self, items):
+
+        assert len(items)>0
+
         i = items[0]
         w = self.__weights[i]
 

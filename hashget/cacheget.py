@@ -15,7 +15,14 @@ log = logging.getLogger('hashget')
 user_agent = 'CacheGet/0.1'
 
 class CacheGet():
-    
+
+    stats = {
+        'missed_files': 0,
+        'missed_bytes': 0,
+        'hit_files': 0,
+        'hit_bytes': 0,
+        }
+
     def __init__(self, cachedir = None, tmpdir = None, tmpprefix = None):
 
         if cachedir:
@@ -47,14 +54,19 @@ class CacheGet():
         basename = url.split('/')[-1]
         
         # local_filename = os.path.join(prefix, basename)
-        parsed = urlparse(url)
-        
-        local_filename = os.path.join(self.cachedir, 'files', parsed.scheme, parsed.netloc, parsed.path[1:])
-        local_dir = os.path.dirname(local_filename)  
-        
-        etag_filename = os.path.join(self.cachedir, 'etags', parsed.scheme, parsed.netloc, parsed.path[1:]+'.etag')
+        #parsed = urlparse(url)
+        #local_filename = os.path.join(self.cachedir, 'files', parsed.scheme, parsed.netloc, parsed.path[1:])
+        #local_dir = os.path.dirname(local_filename)
+        #etag_filename = os.path.join(self.cachedir, 'etags', parsed.scheme, parsed.netloc, parsed.path[1:]+'.etag')
+        #etag_dir =  os.path.dirname(etag_filename)
+
+        local_filename = self.get_path_in_cache(url)
+        local_dir = os.path.dirname(local_filename)
+
+        etag_filename = self.get_path_in_cache(url, subdir='etags', suffix='.etag')
         etag_dir =  os.path.dirname(etag_filename)
-        
+
+
         if os.path.isfile(etag_filename) and os.path.isfile(local_filename):
             # read etag
             with open(etag_filename, 'r') as etagf:
@@ -70,6 +82,10 @@ class CacheGet():
             out['file'] = local_filename
             out['size'] = os.stat(local_filename).st_size
             out['cached'] = os.stat(local_filename).st_size
+
+            # cached, no etag
+            self.__class__.stats['hit_files'] += 1
+            self.__class__.stats['hit_bytes'] += out['size']
             return out
 
 
@@ -107,6 +123,10 @@ class CacheGet():
             out['file'] = local_filename
             out['size'] = os.stat(local_filename).st_size
             out['cached'] = os.stat(local_filename).st_size
+
+            # cached, etag verified
+            self.__class__.stats['hit_files'] += 1
+            self.__class__.stats['hit_bytes'] += out['size']
             return out
         
         if r.status_code != 200:
@@ -131,8 +151,25 @@ class CacheGet():
         out['file'] = local_filename
         out['size'] = os.stat(local_filename).st_size
         out['downloaded'] = os.stat(local_filename).st_size
+
+        # downloaded
+        self.__class__.stats['hit_files'] += 1
+        self.__class__.stats['hit_bytes'] += out['size']
         return out
-            
+
+    def get_path_in_cache(self, url, subdir='files', suffix=None):
+        parsed = urlparse(url)
+        local_filename = os.path.join(self.cachedir, subdir, parsed.scheme, parsed.netloc, parsed.path[1:])
+        if suffix:
+            local_filename = local_filename + suffix
+        return local_filename
+
+
+    def clean_from_cache(self, url):
+        for path in [self.get_path_in_cache(url), self.get_path_in_cache(url, subdir='etags', suffix='.etag')]:
+            if os.path.isfile( path ):
+                os.unlink( path )
+
     def clean(self):
         if os.path.isdir(self.cachedir):
             log.warning('Clean {}'.format(self.cachedir))

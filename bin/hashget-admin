@@ -15,14 +15,20 @@ import filelock
 from hashget.debian import debsubmit
 from hashget.exceptions import HashPackageExists
 from hashget.utils import kmgt, fix_hpspec
+from hashget.filepool import DirFilePool
 
+def build_pool(pooldir, webroot):
+    pool = DirFilePool(pooldir)
+    for path in pool.pool_files():
 
-def hplist(hashdb, project=None, hpspec=None):
-    for name, hdb in hashdb.hashdb.items():
-        if project is None or name == project:
-            for hp in hdb.packages_iter():
-                if hpspec is None or hp.match_hpspec(hpspec):
-                    yield hp
+        f = hashget.file.File(file)
+
+        subpath = pool.hashspec2subpath(f.hashspec)
+        linkpath = os.path.join(webroot, subpath)
+        print("{} > {}".format(linkpath, path))
+        os.makedirs(os.path.dirname(linkpath))
+        os.symlink(path, linkpath)
+
 
 def process_submitted(hashdb, newdir, webroot=None):
 
@@ -75,11 +81,11 @@ def process_submitted(hashdb, newdir, webroot=None):
 
 
 def do_dump(hashdb, basename, project=None, hpspec=None):
-    for hp in hplist(hashdb=hashdb, project=project, hpspec=hpspec):
+    for hp in hashdb.hplist(project=project, hpspec=hpspec):
         print(hp.json())
 
 def do_list(hashdb, project=None, hpspec=None):
-    for hp in hplist(hashdb=hashdb, project=project, hpspec=hpspec):
+    for hp in hashdb.hplist(project=project, hpspec=hpspec):
         print(hp)
 
 def do_purge(hashdb, project=None, hpspec=None, webroot=None, full=False):
@@ -87,7 +93,7 @@ def do_purge(hashdb, project=None, hpspec=None, webroot=None, full=False):
     if hpspec is None:
         print("Will not purge with empty hpspec. Use --hp all")
         return
-    for hp in hplist(hashdb=hashdb, project=project, hpspec=hpspec):
+    for hp in hashdb.hplist(project=project, hpspec=hpspec):
         print("Purge", hp)
         hp.purge(webroot=webroot, full=full)
 
@@ -184,6 +190,7 @@ def main():
     def_webroot = os.getenv('HASHGET_WEBROOT', None)
 
     clean_targets = ['cacheget', 'hashdb', 'all']
+    def_pool=None
 
     """
         Create arguments
@@ -215,7 +222,7 @@ def main():
     g.add_argument('--webroot', default=def_webroot, help='path to web root (def: $HASHGET_WEBROOT={})'.
                    format(def_webroot))
 
-    # g.add_argument('--project', default=None, help='Project name')
+    g.add_argument('--pool', default=def_pool, help='build path to pool (if given, pool in web root created)')
     g.add_argument('--really', default=False, action='store_true', help='additonal flag for dangerous operations')
     g.add_argument('--full', default=False, action='store_true', help='for --purge')
 
@@ -295,13 +302,18 @@ def main():
     if args.build:
         webroot = args.build
 
-        print("build web HashDB in {}".format(webroot))
-        for name, hdb in hashdb.hashdb.items():
-            if name == args.project or not args.project:
-                print(name)
-                for p in hdb.packages_iter():
-                    print(p)
-                    p.make_anchors(webroot)
+        if args.pool:
+            print("build pool {} in webroot {}".format(args.pool, args.build))
+            build_pool(args.pool, args.build)
+        else:
+            print("build web HashDB in {}".format(webroot))
+            for name, hdb in hashdb.hashdb.items():
+                if name == args.project or not args.project:
+                    print(name)
+                    for p in hdb.packages_iter():
+                        print(p)
+                        p.make_anchors(webroot)
+
 
     if args.submitted:
 

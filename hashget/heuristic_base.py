@@ -6,12 +6,13 @@ import hashget.heuristics
 log = logging.getLogger('hashget')
 
 class SubmitRequest():
-    def __init__(self, hashdb=None, url=None, urlmethod=None, signatures=None, project=None):
+    def __init__(self, hashdb=None, url=None, urlmethod=None, signatures=None, project=None, pkgtype=None):
         self.hashdb = hashdb
         self._url = url
         self._urlmethod = urlmethod
         self.signatures = signatures or dict()
         self.project = project or '_submitted'
+        self.pkgtype = pkgtype
 
 
     def first_sig(self):
@@ -44,12 +45,14 @@ class SubmitRequest():
 
         return False
 
-    def submit(self):
+    def submit(self, pool=None):
         hashget.submiturl.submit_url(
             hashdb=self.hashdb,
             url=self.url,
             project=self.project,
-            signatures = self.signatures,
+            signatures=self.signatures,
+            pool=pool,
+            pkgtype=self.pkgtype
             )
 
     def pull_sig(self):
