@@ -227,17 +227,17 @@ when original server is not available.
 Pool populated automatically if --pool given to certain operations (`--submit`, `--index`, `--pack`, `--postunpack`/`-u`):
 
 For example:
-~~~
+```shell
 $ mkdir /tmp/pool
 $ hashget --submit https://wordpress.org/wordpress-5.1.1.zip --pool /tmp/pool/ -p my
 $ ls /tmp/pool
 wordpress-5.1.1.zip
-~~~
+```
 When doing `--postunpack` (`-u`) with `--pool`, hashget will read files from pool, and write it there (if file 
 was not found in pool and downloaded, it will be saved to pool).
 
 
-~~~
+```shell
 # Empty pool 
 $ hashget -u . --pool /tmp/pool
 ...
@@ -253,7 +253,7 @@ apache2-bin_2.4.25-3+deb9u6_amd64.deb                  liblzma5_5.2.2-1.2+b1_amd
 $ hashget -u . --pool /tmp/pool
 ...
 Recovered 8534/8534 files 450.0M bytes (0 downloaded, 98.7M from pool, 0 cached) in 146.92s
-~~~
+```
 
 # Documentation
 For more detailed documentation see [Wiki](https://gitlab.com/yaroslaff/hashget/wikis/home).

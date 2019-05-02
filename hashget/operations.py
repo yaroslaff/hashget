@@ -16,7 +16,7 @@ from hashget.counters import Counters
 log = logging.getLogger('hashget')
 
 
-def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None, pull=False):
+def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None, pull=False, project=None):
 
     if heuristics is None:
         heuristics = list(['all'])
@@ -58,7 +58,7 @@ def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None,
                     continue
 
                 log.info("submitting {}".format(sr.url))
-                sr.submit(pool=pool)
+                sr.submit(pool=pool, project=project)
                 c.inc('new')
 
     if pull:
@@ -253,7 +253,7 @@ def postunpack(root, usermode=False, recursive=False, pool=None):
     return stat_recovered
 
 def pack(hashdb, root, file=None, zip=False, exclude=None, skip=None, anchors=None, filesz=None, heuristics=None,
-         pool=None, pull=False):
+         pool=None, pull=False, project=None):
 
     # defaults
     exclude = exclude or list()
@@ -287,7 +287,7 @@ def pack(hashdb, root, file=None, zip=False, exclude=None, skip=None, anchors=No
     #
 
     log.info("STEP {}/{} Indexing...".format(step, nsteps))
-    index(hashdb=hashdb, root=root, anchors=anchors, filesz=filesz, heuristics=heuristics, pool=pool)
+    index(hashdb=hashdb, root=root, anchors=anchors, filesz=filesz, heuristics=heuristics, pool=pool, project=project)
     step += 1
 
     log.info('STEP {}/{} prepare exclude list for packing...'.format(step, nsteps))
@@ -336,5 +336,5 @@ def pack(hashdb, root, file=None, zip=False, exclude=None, skip=None, anchors=No
 
     if file:
         statinfo = os.stat(file)
-        log.info('{} ({}) packed into {} ({})'.format(root, hashget.utils.kmgt(hashget.utils.dir_size(root)), file,
+        log.info('{} ({}) packed into {} ({})'.format(root, hashget.utils.kmgt(hashget.utils.du(root)), file,
                                                       hashget.utils.kmgt(statinfo.st_size)))

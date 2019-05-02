@@ -286,7 +286,7 @@ def test_compress_decompress(tmpdir):
     # assert: CacheGet stats are different, new requests happened during postunpacking
     assert(cgstats1 != cgstats2)
 
-    ds = hashget.utils.dir_size(unpackdir)
+    ds = hashget.utils.du(unpackdir)
     assert(ds > settings.package['unpacked_minsize'])
 
 

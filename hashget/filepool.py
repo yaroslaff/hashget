@@ -122,6 +122,11 @@ class DirFilePool(FilePool):
         except KeyError:
             return default
 
+    def get_by_basename(self, basename):
+        for sum, path in self._hashes.items():
+            if os.path.basename(path) == basename:
+                return path
+
     def truncate(self):
         """
         delete all files from pool

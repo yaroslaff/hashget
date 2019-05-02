@@ -2,4 +2,5 @@
 .idea
 dist/
 hashget.egg-info/
+.pytest_cache
 

@@ -14,7 +14,7 @@ import filelock
 
 from hashget.debian import debsubmit
 from hashget.exceptions import HashPackageExists
-from hashget.utils import kmgt, fix_hpspec
+from hashget.utils import kmgt, fix_hpspec, du
 from hashget.filepool import DirFilePool
 
 
@@ -101,18 +101,10 @@ def do_purge(hashdb, project=None, hpspec=None, webroot=None, full=False):
 
 def do_status(hashdb, project=None, webroot=None):
 
-    def dir_size(start_path='.'):
-        size = 0
-        for dirpath, dirnames, filenames in os.walk(start_path):
-            for f in filenames:
-                fp = os.path.join(dirpath, f)
-                size += os.path.getsize(fp)
-        return size
-
     for name, hdb in hashdb.items():
         if name == project or project is None:
             print(name, hdb)
-            print("  size: {}".format(kmgt(dir_size(hdb.path))))
+            print("  size: {}".format(kmgt(du(hdb.path))))
 
             last_crawled = None
             first_crawled = None

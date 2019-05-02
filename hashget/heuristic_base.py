@@ -1,9 +1,12 @@
 import importlib
 import pkgutil
 import logging
+import os
 import hashget.heuristics
 
 log = logging.getLogger('hashget')
+
+heuristics_path = list()
 
 class SubmitRequest():
     def __init__(self, hashdb=None, url=None, urlmethod=None, signatures=None, project=None, pkgtype=None):
@@ -45,11 +48,20 @@ class SubmitRequest():
 
         return False
 
-    def submit(self, pool=None):
+    def submit(self, pool=None, project=None):
+        """
+        project can be used to override self.project
+
+        :param pool:
+        :param project:
+        :return:
+        """
+        project = project or self.project
+
         hashget.submiturl.submit_url(
             hashdb=self.hashdb,
             url=self.url,
-            project=self.project,
+            project=project,
             signatures=self.signatures,
             pool=pool,
             pkgtype=self.pkgtype
@@ -90,6 +102,25 @@ class HeuristicSet():
             for finder, name, ispkg
             in iter_namespace(hashget.heuristics)
         }
+
+        #self.plugins += {
+        #    name: importlib.import_module(name)
+        #    for finder, name, ispkg
+        #    in pkgutil.iter_modules(heuristics_path, 'hashget.heuristics.')
+        #}
+
+        for nt in pkgutil.iter_modules(heuristics_path):
+            mpath = os.path.join(nt.module_finder.path, nt.name, '__init__.py')
+            mname = 'hashget.heuristics.' + nt.name
+
+            if mname in self.plugins:
+                log.debug("skip already loaded {}".format(mname))
+            else:
+                spec = importlib.util.spec_from_file_location(mname, mpath)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                log.debug("loading special plugin: {}".format(module))
+                self.plugins[mname] = module
 
         for name, mod in self.plugins.items():
             for cls in mod.heuristics:
