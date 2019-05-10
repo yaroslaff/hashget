@@ -73,6 +73,9 @@ class HashPackage(object):
         if self.anchors:
             self.anchors = list(set(self.anchors))
 
+        if isinstance(self.expires, str):
+            self.expires = utils.str2dt(self.expires)
+
     @classmethod
     def load(cls, path=None, stream=None, data=None):
         """
@@ -114,6 +117,7 @@ class HashPackage(object):
         with open(path, "w") as f:
             f.write(self.json())
 
+    @property
     def basename(self):
         return self.url.split('/')[-1]
 
@@ -122,7 +126,7 @@ class HashPackage(object):
 
     def __repr__(self):
         # return "{} {} {}".format(self.basename(), id(self), self.hashspec)
-        return "{} ({}/{})".format(self.basename(), len(self.anchors), len(self.files))
+        return "{} ({}/{})".format(self.basename, len(self.anchors), len(self.files))
 
 
     def get_phash(self):
@@ -226,8 +230,7 @@ class HashPackage(object):
             return True
 
         if prefix == 'name':
-            return self.basename() == value
-
+            return self.basename == value
 
         if prefix in ['expires', 'expired']:
 

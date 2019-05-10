@@ -104,8 +104,8 @@ def do_set(hashdb, project=None, hpspec=None, attr=None, value=None):
         if hasattr(hp, attr):
             setattr(hp, attr, value)
         else:
-            print("set attr", attr)
             hp.attrs[attr] = value
+        hp.fix()
         hp.save()
 
 def do_purge(hashdb, project=None, hpspec=None, webroot=None, full=False):
@@ -283,7 +283,6 @@ def main():
         do_get(hashdb=hashdb, project=args.project, hpspec=hpspec, attrlist=args.get)
 
     if args.set:
-        print("SET:", args.set)
         do_set(hashdb=hashdb, project=args.project, hpspec=hpspec, attr=args.set[0], value=args.set[1])
 
 

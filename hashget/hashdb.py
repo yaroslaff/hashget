@@ -192,7 +192,11 @@ class DirHashDB(HashDB):
 
     def packages_iter(self):
         for path in self.package_files():
-            hp = self.hpclass.load(path=path)
+            try:
+                hp = self.hpclass.load(path=path)
+            except json.decoder.JSONDecodeError:
+                log.warning('Skipping incorrent HashPackage file {}'.format(path))
+                continue
             hp.hashdb = self
             yield hp
 
@@ -234,7 +238,7 @@ class DirHashDB(HashDB):
 
     def basename2hp(self, basename):
         for hp in self.packages_iter():
-            if hp.basename() == basename:
+            if hp.basename == basename:
                 return hp
         raise KeyError
 
