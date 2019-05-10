@@ -209,12 +209,14 @@ automatically index (at least while new linux kernels will match same 'template'
 as example. 
 
 ### What you should index 
-You should index ONLY static and permanent files, which will be available on same URL with same content.
+You should index ONLY static and permanent files, which will be available on same URL with same content during backup 
+lifetime. See [Expiration](https://gitlab.com/yaroslaff/hashget/wikis/Expiration) chapter in wiki documentation.
+
 Not all projects provides such files. Usual linux package repositories has only latest files so it's not good for this
 purpose, but debian has great [snapshot.debian.org](https://snapshot.debian.org/) repository, which makes Debian great 
 for hashget compression.
 
-Do not index *latest* files, because content will change    later (it's not _static_). E.g. you may index 
+Do not index *latest* files, because content will change later (it's not _static_). E.g. you may index 
 https://wordpress.org/wordpress-5.1.1.zip but you should not index https://wordpress.org/latest.zip 
 
 ### Differential and incremental backups
