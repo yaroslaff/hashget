@@ -89,7 +89,28 @@ def do_list(hashdb, project=None, hpspec=None):
     for hp in hashdb.hplist(project=project, hpspec=hpspec):
         print(hp)
 
+def do_get(hashdb, project=None, hpspec=None, attrlist=None):
+    for hp in hashdb.hplist(project=project, hpspec=hpspec):
+        outlist=list()
+        for attr in attrlist:
+            if hasattr(hp, attr):
+                outlist.append(str(getattr(hp, attr)))
+            elif attr in hp.attrs:
+                outlist.append(str(hp.attrs[attr]))
+        print(' '.join(outlist))
+
+def do_set(hashdb, project=None, hpspec=None, attr=None, value=None):
+    for hp in hashdb.hplist(project=project, hpspec=hpspec):
+        if hasattr(hp, attr):
+            setattr(hp, attr, value)
+        else:
+            print("set attr", attr)
+            hp.attrs[attr] = value
+        hp.save()
+
 def do_purge(hashdb, project=None, hpspec=None, webroot=None, full=False):
+
+    purged = 0
 
     if hpspec is None:
         print("Will not purge with empty hpspec. Use --hp all")
@@ -97,6 +118,13 @@ def do_purge(hashdb, project=None, hpspec=None, webroot=None, full=False):
     for hp in hashdb.hplist(project=project, hpspec=hpspec):
         print("Purge", hp)
         hp.purge(webroot=webroot, full=full)
+        purged += 1
+
+    if purged:
+        print("Purged {} packages".format(purged))
+    else:
+        print("nothing found for hpspec: {} project: {}".format(hpspec, project))
+
 
 
 def do_status(hashdb, project=None, webroot=None):
@@ -200,6 +228,8 @@ def main():
     g.add_argument('--addproject', default=False, action='store_true', help='create -p project')
     g.add_argument('--rmproject', default=False, action='store_true', help='delete -p project')
     g.add_argument('--modify', default=False, action='store_true', help='modify -p project')
+    g.add_argument('--get', default=None, nargs='+', metavar='FIELD', help='set field for HP')
+    g.add_argument('--set', default=None, nargs=2, metavar=('ATTR','VALUE'), help='set attr for HP')
     g.add_argument('--build', default=None, metavar='WEBROOT', help='build static web HashDB')
     g.add_argument('--verify', default=None, metavar='ACTION', nargs='?', const=True, help='verify package(s). ACTION is report|delete. def: report')
     g.add_argument('--submitted', default=None, metavar='UPLOADS_DIR',
@@ -225,7 +255,6 @@ def main():
 
     g.add_argument('--logfile', default=None, help='log file name')
     g.add_argument('--verbose', '-v', default=False, action='store_true', help='verbose logging')
-    # g.add_argument('--loop', default=False, action='store_true', help='work in loop (for --submitted)')
 
     args = parser.parse_args()
 
@@ -243,13 +272,20 @@ def main():
         fh.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
         log.addHandler(fh)
 
-
     hpspec = fix_hpspec(args.hp)
     hashdb = hashget.hashdb.HashDBClient(path=args.path, load=False)
     anchors = hashget.AnchorList()
 
     if args.list:
         do_list(hashdb=hashdb, project=args.project, hpspec=hpspec)
+
+    if args.get:
+        do_get(hashdb=hashdb, project=args.project, hpspec=hpspec, attrlist=args.get)
+
+    if args.set:
+        print("SET:", args.set)
+        do_set(hashdb=hashdb, project=args.project, hpspec=hpspec, attr=args.set[0], value=args.set[1])
+
 
     if args.status:
         do_status(hashdb, args.project, args.webroot)
@@ -340,7 +376,7 @@ def main():
 
     if args.verify:
         action = args.verify or 'report'
-        for hp in hplist(hashdb=hashdb, project=args.project, hpspec=hpspec):
+        for hp in hashdb.hplist(project=args.project, hpspec=hpspec):
             if hp.verify():
                 print("VERIFIED {}".format(hp))
             else:

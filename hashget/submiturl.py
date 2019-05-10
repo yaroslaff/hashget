@@ -7,7 +7,7 @@ import hashget.anchor
 log = logging.getLogger('hashget')
 
 def submit_url(url, project, anchors=None, filesz=None, hashdb=None, file=None, signatures=None,
-               pkgtype=None, attrs=None, pool=None):
+               pkgtype=None, attrs=None, pool=None, expires=None):
     """
     function interface
 
@@ -62,7 +62,8 @@ def submit_url(url, project, anchors=None, filesz=None, hashdb=None, file=None, 
         url=url,
         attrs=attrs,
         hashes=p.hashes.get_list(),
-        signatures=signatures
+        signatures=signatures,
+        expires=expires
     )
 
     hp.set_attr('size', p.package_size)

@@ -4,6 +4,7 @@ import hashlib
 from tempfile import mkdtemp
 import patoolib
 import time
+import datetime
 
 unpack_suffixes = [ '.deb', '.gz', '.xz', '.bz2', '.zip' ]
 
@@ -34,6 +35,17 @@ def rmrf(dirname):
 
 def du(root_path = '.'):
     return sum([os.path.getsize(fp) for fp in (os.path.join(dirpath, f) for dirpath, dirnames, filenames in os.walk(root_path) for f in filenames) if not os.path.islink(fp)])
+
+
+def str2dt(dt):
+    assert (type(dt) in [type(None), datetime.datetime, str])
+
+    # self.expires is either None or datetime
+    if isinstance(dt, str):
+        # if YYYY-MM-DD
+        return datetime.datetime.strptime(dt, '%Y-%m-%d')
+    else:
+        return dt
 
 def dircontent(root):
     """
@@ -143,10 +155,14 @@ def fix_hpspec(hpspec):
         except ValueError:
             specprefix = None
 
-        if specprefix in [ 'sig', 'url', 'name', 'all' ]:
+        if specprefix in [ 'sig', 'url', 'name', 'all', 'expires' ]:
             return hpspec
         elif hpspec == 'all':
             return 'all:all'
+        elif hpspec in ['expired','expires']:
+            return 'expires:'
+        elif specprefix == 'expired':
+            return 'expires:'+spec
         elif hpspec.startswith("http://") or hpspec.startswith("https://"):
             return 'url:' + hpspec
         else:

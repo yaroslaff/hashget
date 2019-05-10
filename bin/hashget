@@ -172,6 +172,7 @@ def main():
     g = parser.add_argument_group('Indexing options')
     g.add_argument('--anchsz', type=int, default=def_anchsz, help='min size of anchors ({})'.format(def_anchsz))
     g.add_argument('--filesz', type=int, default=def_filesz, help='min size of files ({})'.format(def_filesz))
+    g.add_argument('--expires', default=None, type=hashget.utils.str2dt, help='expiration date YYYY-MM-DD')
     g.add_argument('--project', '-p', default=def_project, help='project name ({})'.format(def_project))
     g.add_argument('--sleep', type=int, default=def_sleep, help='delay ({}s)'.format(def_sleep))
     g.add_argument('--fanchor', nargs='+', metavar='FILEGLOB', default=list(),
@@ -285,14 +286,15 @@ def main():
         else:
             excludefile = args.excludefile
 
-        hashget.operations.prepare(path,
+        rfile = hashget.operations.prepare(path,
                 hashdb=hashdb,
                 anchors=anchors,
                 filesz=args.filesz,
                 skip=gl,
                 excludefile=excludefile,
-                pull=args.pull
+                expires=args.expires
                 )
+        print("Saved:", rfile)
 
     if args.postunpack:
         hashget.operations.postunpack(
@@ -327,7 +329,8 @@ def main():
             anchors=anchors,
             signatures=signatures,
             filesz=args.filesz,
-            pool=pool)
+            pool=pool,
+            expires=hashget.utils.str2dt(args.expires))
 
     if args.debsubmit:
         debsubmit(hashdb, args.debsubmit, anchors)
@@ -344,7 +347,8 @@ def main():
             filesz=args.filesz,
             heuristics=args.heuristics,
             pool=pool,
-            pull=args.pull)
+            pull=args.pull,
+            expires=args.expires)
 
 if __name__ == '__main__':
     main()

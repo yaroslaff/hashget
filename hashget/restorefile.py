@@ -2,8 +2,7 @@ import json
 import os
 from .file import File
 from . import utils
-from .singlelist import SingleList
-import time
+import datetime
 
 class RestoreFile(object):
     
@@ -33,9 +32,24 @@ class RestoreFile(object):
                 f = File.from_dict(fdata, self.root)
                 yield f
 
-
+    @property
     def npackages(self):
         return len(self.data['packages'])
+
+    @property
+    def nfiles(self):
+        return len(self.data['files'])
+
+    @property
+    def package_size(self):
+        return self.data['packagesize']
+
+    @property
+    def sumsize(self):
+        sumsize = 0
+        for fd in self.data['files']:
+            sumsize += fd['size']
+        return sumsize
 
     def packages_iter(self):
         for pdata in self.data['packages']:
@@ -55,6 +69,7 @@ class RestoreFile(object):
         p = dict()
         p['url'] = url
         p['hash'] = hashspec
+
         self.data['packages'].append(p)
         if size is not None:
             self.data['packagesize']+= size
@@ -98,27 +113,14 @@ class RestoreFile(object):
     def preiteration(self):
         for fdata in self.data['files']:
             fdata['processed'] = False     
-  
-    def sumsize(self):
-        sumsize = 0
-        for fd in self.data['files']:
-            sumsize += fd['size']
-        return sumsize
-            
+
     def __repr__(self):
         return '{} files, {} pkgs, size: {}. Download: {}{}'.format(
                 len(self.data['files']),
                 len(self.data['packages']),
-                utils.kmgt(self.sumsize()),
+                utils.kmgt(self.sumsize),
                 utils.kmgt(self.data['packagesize']),
                 '' if self.data['packagesize_exact'] else '+')
-
-    def get_nfiles(self):
-        return len(self.data['files'])
-
-    @property
-    def package_size(self):
-        return self.data['packagesize']
 
     def check_processed(self):
         np = 0
@@ -133,3 +135,16 @@ class RestoreFile(object):
         if nnp > 0:
             print("processed: {}/{} files, missing {} files. Try --recursive option".format(np, len(self.data['files']), nnp))
 
+    def set_field(self, key, value):
+        self.data[key] = value
+
+    def get_field(self, key):
+        return self.data[key]
+
+    def expired(self):
+        if not 'expires' in self.data:
+            return None
+        exp_date = utils.str2dt(self.data['expires'])
+        now = datetime.datetime.now()
+
+        return now > exp_date

@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import sys
+import datetime
 
 import hashget
 import hashget.hashdb
@@ -95,7 +96,7 @@ def setup_module(module):
     if settings.package['format'] == 'zip':
         cmd = ['/usr/bin/unzip', '-q', pkgfile, '-d', unpacked]
         cp = subprocess.run(cmd)
-        assert(cp.returncode == 0)
+        assert cp.returncode == 0, "Unzip failed"
 
     # submit first package
     hashdb = hashget.hashdb.HashDBClient(enabled_hashdb=test_projects)
@@ -113,14 +114,14 @@ def setup_module(module):
     _prepare()
 
 
-
-def _prepare():
+def _prepare(hp=None):
     """
     truncate all test projects and submit standard_hp to project
 
     :return:
     """
     global hashdb, hdb
+    hp = hp or standard_hp
 
     hdb = hashdb[debproject]
     hdb.truncate()
@@ -128,7 +129,7 @@ def _prepare():
     hdb = hashdb[project]
     hdb.truncate()
 
-    hashdb.submit_save(standard_hp, project)
+    hashdb.submit_save(hp, project)
 
     pool.truncate()
 
@@ -213,6 +214,27 @@ def test_index_pool(tmpdir, vmroot):
     hashget.operations.index(hashdb=hashdb, root=rootdir, pool=pool)
     assert len(pool) > 0
 
+def test_expiration(tmpdir):
+    hp = standard_hp.clone()
+    hp.expires = datetime.datetime.today() + datetime.timedelta(1) # HP expires tomorrow
+    _prepare(hp=hp)
+    workdir = os.path.join(tmpdir,"x")
+    # os.mkdir(workdir)
 
+    populate(workdir)
+
+    # archive expires today, HP expires tomorrow, HP should be used
+    r = hashget.operations.prepare(hashdb=hashdb, root=tmpdir, anchors=None,
+                                   expires=datetime.datetime.today())
+    assert r.sumsize >= 0, "HP was not used"
+
+    # archive expires 2 days ahead, HP expires and should not be used
+    r = hashget.operations.prepare(hashdb=hashdb, root=tmpdir, anchors=None,
+                                   expires=datetime.datetime.today() + datetime.timedelta(2))
+    assert r.sumsize == 0, "Expired HP used for expiration archive"
+
+    # archive expires 2 days ahead. HP expires and should not be used
+    r = hashget.operations.prepare(hashdb=hashdb, root=tmpdir, anchors=None)
+    assert r.sumsize == 0, "Expired HP used for never expired archive"
 
 

@@ -132,10 +132,7 @@ class DirHashDB(HashDB):
 
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
-        with open(path, "w") as f:
-            f.write(hp.json())
-
-        hp.path = path
+        hp.save(path)
 
         return path
 
@@ -224,8 +221,14 @@ class DirHashDB(HashDB):
             return
 
         for path in self.package_files():
-            hp = self.hpclass.load(path=path)
-            self.submit(hp)
+            try:
+                hp = self.hpclass.load(path=path)
+                if hp.expired():
+                    log.warning('Skip loading expired HP file {}'.format(path))
+                else:
+                    self.submit(hp)
+            except json.decoder.JSONDecodeError:
+                log.error('Skip incorrect HP file {}'.format(path))
 
         self.loaded = True
 
@@ -712,7 +715,7 @@ class HashDBClient(HashDB):
 
         raise KeyError("Not found basename {} in any of hashdb: {}".format(basename, list(self.hashdb.keys())))
 
-    def hash2hp(self, hspec, remote=True):
+    def hash2hp(self, hspec, remote=True, expires=None):
         """
 
         :param hspec:
@@ -732,6 +735,15 @@ class HashDBClient(HashDB):
             for hs in self.hashserver:
                 hp = hs.hash2hp(hspec)
                 r.extend(hp)
+
+        # filter from expired
+        if expires:
+            # finite expiration
+            r = [ hp for hp in r if not hp.expired(expires) ]
+        else:
+            # infinite expiration
+            r = [ hp for hp in r if not hp.expires ]
+
 
         return r
 

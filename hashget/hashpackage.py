@@ -1,13 +1,13 @@
 import os
 import json
 import logging
+import datetime
 
 from . import utils
 import requests
 
 log = logging.getLogger('hashget')
 from . import __user_agent__
-
 
 class HashPackage(object):
     """
@@ -26,9 +26,9 @@ class HashPackage(object):
 
     pkgtype = 'generic'
 
-    fields = ['url', 'files', 'anchors', 'signatures', 'hashes', 'attrs']
+    fields = ['url', 'files', 'anchors', 'signatures', 'hashes', 'attrs', 'expires']
 
-    def __init__(self, url=None, anchors=None, files=None, hashes=None, attrs=None, signatures=None):
+    def __init__(self, url=None, anchors=None, files=None, hashes=None, attrs=None, signatures=None, expires = None):
         self.url = url
         self.path = None
         self.anchors = anchors
@@ -38,15 +38,17 @@ class HashPackage(object):
         self.signatures = signatures
         self.hashdb = None
 
+        self.expires = utils.str2dt(expires)
+
         self.fix()
 
-    def UNUSED_all_specs(self):
-        specs = list()
-        specs.append(self.basename())
-        specs.append(self.url)
-        specs.extend(self.signatures.values())
-        specs = list(set(specs))
-        return specs
+    def expired(self, dt=None):
+        if self.expires is None:
+            # not expired, never expires
+            return False
+
+        dt = dt or datetime.datetime.now()
+        return dt > self.expires
 
     def __eq__(self, obj):
         return (self.url == obj.url
@@ -73,7 +75,16 @@ class HashPackage(object):
 
     @classmethod
     def load(cls, path=None, stream=None, data=None):
+        """
+            load from path/stream or data
+            can throw json.decoder.JSONDecodeError if not JSON (e.g. empty file)
+        :param path:
+        :param stream:
+        :param data:
+        :return:
+        """
         hp = cls()
+
         if path:
             hp.path = path
             with open(path) as stream:
@@ -85,6 +96,9 @@ class HashPackage(object):
         else:
             raise (ValueError)
 
+        if 'expires' in data:
+            data['expires'] = utils.str2dt(data['expires'])
+
         for name in data.keys():
             setattr(hp, name, data[name])
 
@@ -92,8 +106,19 @@ class HashPackage(object):
 
         return hp
 
+    def save(self, path=None):
+        if path:
+            self.path=path
+        path = self.path
+        assert(path)
+        with open(path, "w") as f:
+            f.write(self.json())
+
     def basename(self):
         return self.url.split('/')[-1]
+
+    def clone(self):
+        return self.__class__.load(data=self.dict())
 
     def __repr__(self):
         # return "{} {} {}".format(self.basename(), id(self), self.hashspec)
@@ -122,7 +147,11 @@ class HashPackage(object):
     def json(self):
         # data['hashes'] = self.hashes.get_list()
         self.fix()
-        return json.dumps(self.dict(), indent=4)
+        d = self.dict()
+        if 'expires' in d and d['expires'] is not None:
+            d['expires'] = d['expires'].strftime('%Y-%m-%d')
+
+        return json.dumps(d, indent=4)
 
     def get_special_anchors(self):
         return list()
@@ -191,11 +220,21 @@ class HashPackage(object):
 
         prefix, value = hpspec.split(':', 1)
 
+        #print(prefix, value)
+
         if prefix == 'all':
             return True
 
         if prefix == 'name':
             return self.basename() == value
+
+
+        if prefix in ['expires', 'expired']:
+
+            if value:
+                exp_date = utils.str2dt(value)
+                return self.expired(exp_date)
+            return self.expired()
 
         if prefix == 'url':
             return self.url == value

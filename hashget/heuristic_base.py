@@ -9,6 +9,9 @@ log = logging.getLogger('hashget')
 heuristics_path = list()
 
 class SubmitRequest():
+
+    filesz = None
+
     def __init__(self, hashdb=None, url=None, urlmethod=None, signatures=None, project=None, pkgtype=None):
         self.hashdb = hashdb
         self._url = url
@@ -64,7 +67,8 @@ class SubmitRequest():
             project=project,
             signatures=self.signatures,
             pool=pool,
-            pkgtype=self.pkgtype
+            pkgtype=self.pkgtype,
+            filesz=self.filesz
             )
 
     def pull_sig(self):
