@@ -219,9 +219,6 @@ for hashget compression.
 Do not index *latest* files, because content will change later (it's not _static_). E.g. you may index 
 https://wordpress.org/wordpress-5.1.1.zip but you should not index https://wordpress.org/latest.zip 
 
-### Differential and incremental backups
-See [Incremental backups](https://gitlab.com/yaroslaff/hashget/wikis/incremental) chapter in wiki doc.
-
 ### Using local file pool
 It's possible to use local or remote (e.g. on Intranet HTTP server) file pool. This can help to unpack archives even 
 when original server is not available. 
@@ -257,6 +254,10 @@ $ hashget -u . --pool /tmp/pool
 Recovered 8534/8534 files 450.0M bytes (0 downloaded, 98.7M from pool, 0 cached) in 146.92s
 ```
 
-# Documentation
+# More Documentation
 For more detailed documentation see [Wiki](https://gitlab.com/yaroslaff/hashget/wikis/home).
+
+For example, see [Incremental backups](https://gitlab.com/yaroslaff/hashget/wikis/incremental) chapter in wiki doc
+and [Glacier](https://gitlab.com/yaroslaff/hashget/wikis/Glacier) to know how to use Incremental/Differential backups 
+with Amazon Glacier or other storage engine. 
 

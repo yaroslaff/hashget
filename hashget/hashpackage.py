@@ -48,7 +48,7 @@ class HashPackage(object):
             return False
 
         dt = dt or datetime.datetime.now()
-        return dt > self.expires
+        return self.expires < dt
 
     def __eq__(self, obj):
         return (self.url == obj.url
