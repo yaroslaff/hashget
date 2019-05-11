@@ -12,12 +12,14 @@ permissions, ownership, atime and mtime.
 Hashget compression is lossless, based on cryptographically strong SHA256 hashsum. (No collisions know for now)
 
 <details>
-<summary>Chance of collision</summary>
+<summary>Chance of SHA256 collision</summary>
 Bitcoin was computing 300 quadrillion SHA-256 hashes per second. That's 300×1015 hashes per second. Let's say you were trying to perform a collision attack and would "only" need to calculate 2128 hashes. At the rate Bitcoin is going, it would take them 2128/(300×1015⋅86400⋅365.25)≈3.6×1013 years. 
 
 In comparison, our universe is only about 13.7×109 years old. 
+
 https://crypto.stackexchange.com/questions/47809/why-havent-any-sha-256-collisions-been-found-yet
-</summary>
+
+</details>
 
 ## Effectiveness
 |Data sample            | unpacked size  |.tar.gz         | hashget .tar.gz         | 
