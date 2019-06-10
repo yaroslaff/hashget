@@ -349,3 +349,41 @@ def pack(hashdb, root, file=None, zip=False, exclude=None, skip=None, anchors=No
         statinfo = os.stat(file)
         log.info('{} ({}) packed into {} ({})'.format(root, hashget.utils.kmgt(hashget.utils.du(root)), file,
                                                       hashget.utils.kmgt(statinfo.st_size)))
+
+def info(rfilepath, root=None, subcommand='info', pool=None):
+
+    rfile = hashget.restorefile.RestoreFile(os.path.join(root, '.hashget-restore.json'))
+
+    np_total = 0
+    np_down = 0
+    np_pool =0
+
+    pool_bytes = 0
+
+    if subcommand == 'info':
+
+        if rfile.expired():
+            log.warning('WARNING: Restoring from expired ({}) archive.'.format(rfile.get_field('expires')))
+
+        for pdata in rfile.packages_iter():
+            np_total += 1
+            poolfile = pool.get(pdata['hash'], name=pdata['url'], default=None)
+            if poolfile:
+                np_pool += 1
+                pool_bytes += os.stat(poolfile).st_size
+            else:
+                np_down += 1
+
+        print("Total: {} packages ({})\n"
+              "In pool: {} packages ({})\n"
+              "Download: {} packages\n".format(
+            np_total, kmgt(rfile.package_size),
+            np_pool, kmgt(pool_bytes),
+            np_down))
+
+    elif subcommand == 'list':
+        for pdata in rfile.packages_iter():
+            np_total += 1
+            if not pool.get(pdata['hash'], name=pdata['url'], default=None):
+                print(pdata['url'])
+

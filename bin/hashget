@@ -198,6 +198,7 @@ def main():
     g.add_argument('-z', default=False, action='store_true', help='gzip tarred archive')
     g.add_argument('--sig', nargs='+', default=list(), metavar='SIG', help='Signature for --submit. format: SIGTYPE:SIGNATURE')
     g.add_argument('--pool', default=def_pool, metavar='PATH', help='Pool with package files ({})'.format(def_pool))
+    g.add_argument('--info', default=None, nargs='*', metavar=('PATH', 'SUBCOMMAND'), help='Info about unpacking. Subcommands are: list and summary')
 
 
     g = parser.add_argument_group('Target directory specification')
@@ -262,6 +263,29 @@ def main():
 
     # Options
     hashget.package.opt_recursive = args.recursive
+
+    if args.info:
+        path = args.info[0]
+
+        if os.path.isdir(path):
+            root = path
+            rfile = os.path.join(root, '.hashget-restore.json')
+            assert(os.path.isfile(rfile))
+        else:
+            root = None
+            rfile = path
+
+        if len(args.info) == 2:
+            subcommand = args.info[1]
+        else:
+            subcommand = 'info'
+
+        hashget.operations.info(rfilepath=rfile,
+                                root=root,
+                                subcommand=subcommand,
+                                pool=pool)
+        sys.exit(0)
+
 
     if args.index:
         hashget.operations.index(
