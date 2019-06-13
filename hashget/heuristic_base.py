@@ -61,6 +61,10 @@ class SubmitRequest():
         """
         project = project or self.project
 
+        if self.url is None:
+            log.debug('Do not submit {} beause empty URL'.format(self))
+            return
+
         hashget.submiturl.submit_url(
             hashdb=self.hashdb,
             url=self.url,

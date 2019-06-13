@@ -30,7 +30,7 @@ def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None,
 
     heur = HeuristicSet(hashdb=hashdb, heuristics=heuristics)
 
-    c = Counters(['total', 'local', 'pulled','new'])
+    c = Counters(['total', 'local', 'pulled','new','skipped'])
 
     started = time.time()
 
@@ -60,9 +60,13 @@ def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None,
                     c.inc('pulled')
                     continue
 
-                log.info("submitting {}".format(sr.url))
-                sr.submit(pool=pool, project=project)
-                c.inc('new')
+                if sr.url:
+                    log.info("submitting {}".format(sr.url))
+                    sr.submit(pool=pool, project=project)
+                    c.inc('new')
+                else:
+                    log.info("skipped {}".format(sr.first_sig()[1]))
+                    c.inc('skipped')
 
     if pull:
         log.debug('Try pulling {} anchors'.format(len(anchors)))
@@ -71,9 +75,9 @@ def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None,
             log.debug('pull anchor for {} {}: {}'.format(a.filename,
                                                          kmgt(a.size), pullanchor))
 
-    log.info('Indexing done in {:.2f}s. {} local + {} pulled + {} new = {} total packages'.format(
+    log.info('Indexing done in {:.2f}s. {} local + {} pulled + {} new + {} skipped = {} total packages'.format(
         time.time() - started,
-        c.local, c.pulled, c.new, c.total))
+        c.local, c.pulled, c.new, c.skipped, c.total))
     print(c)
     return c
 
