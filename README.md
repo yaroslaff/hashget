@@ -1,6 +1,7 @@
 # hashget
 
-Hashget is network *deduplication* tool working together with usual compression utilities (such as tar/gz/xz).  
+Hashget is network *deduplication* tool working together with usual compression utilities (such as tar/gz/xz) and can be 
+[combined](https://gitlab.com/yaroslaff/hashget/wikis/Restic%20with%20hashget) with other backup tools such as [restic](https://restic.net/).  
 
 While usual compression tools uses mathematical algorithms for compressing data, hashget finds which files could be 
 downloaded from public (e.g. WordPress or Debian servers) or private (e.g. your company internal website) resources and 
