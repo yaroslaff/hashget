@@ -422,9 +422,18 @@ class HashServer:
             # self.config = {**self.config, **json.loads(r.text)}
 
         r = requests.get(urllib.parse.urljoin(self.url, self.config['motd']), headers=self.headers)
-        log.info(r.text.rstrip())
+        self.motd_text = r.text.rstrip()
+        self.motd_displayed = False
+
+    def display_motd(self):
+        if self.motd_displayed:
+            return
+        self.motd_displayed = True
+        log.info(self.motd_text)
 
     def fhash2url(self, hashspec):
+        self.display_motd()
+
         spec, hsum = hashspec.split(':', 1)
         if spec != 'sha256':
             raise KeyError
@@ -443,7 +452,7 @@ class HashServer:
         :param hashspec:
         :return:
         """
-
+        self.display_motd()
         r = requests.get(self.fhash2url(hashspec), headers=self.headers)
 
         if r.status_code != 200:
@@ -459,6 +468,7 @@ class HashServer:
         return False
 
     def sig_present(self, sigtype, signature):
+        self.display_motd()
         if sigtype == 'deb':
             path = ['sig', 'deb'] + debian.debsig2path(signature)
             url = urllib.parse.urljoin(self.config['hashdb'], '/'.join(path))
@@ -470,7 +480,7 @@ class HashServer:
         return False
 
     def sig2hp(self, sigtype, signature):
-
+        self.display_motd()
         if sigtype == 'deb':
             path = ['sig', 'deb'] + debian.debsig2path(signature)
             url = urllib.parse.urljoin(self.config['hashdb'], '/'.join(path))

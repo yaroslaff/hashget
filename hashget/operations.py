@@ -210,15 +210,17 @@ def postunpack(root, usermode=False, recursive=False, pool=None):
 
         if local_package_file:
             log.debug('[{}/{}] restore from file {}'.format(npackages, rfile.npackages, local_package_file))
+            from_pool = True
             p = hashget.package.Package(path=local_package_file)
             stat_cached_pool += os.stat(local_package_file).st_size
         else:
+            from_pool = False
             log.debug('[{}/{}] restore from URL {}'.format(npackages, rfile.npackages, pdata['url']))
             p = hashget.package.Package(url=pdata['url'])
 
         p.recursive = recursive
         p.download()
-        if pool is not None:
+        if pool is not None and from_pool == False:
             pool.append(p.path)
         p.unpack()
         p.read_files()

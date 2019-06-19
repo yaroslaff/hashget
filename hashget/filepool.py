@@ -19,7 +19,7 @@ class FilePool(object):
         pass
 
     def append(self, path):
-        pass
+        return False
 
     def get(self, item, default=None, name=None):
         pass
@@ -36,7 +36,6 @@ class FilePool(object):
         # nothing.
         pass
 
-
 class NullFilePool(FilePool):
     def __init__(self):
         super().__init__()
@@ -48,6 +47,46 @@ class NullFilePool(FilePool):
         return default
 
 
+class FilePoolMultiplexer(FilePool):
+
+    def __init__(self):
+        self._pools = list()
+
+    def __getitem__(self, item):
+        for pool in self._pools:
+            try:
+                x = pool[item]
+                return x
+            except KeyError:
+                pass
+        raise KeyError
+
+    def get(self, item, default=None, name=None):
+        for pool in self._pools:
+            x = pool.get(item, default=default, name=name)
+            if x != default:
+                return x
+        return default
+
+    def append(self, path):
+        for pool in self._pools:
+            if pool.append(path):
+                # append only to first pool which accepted it
+                return
+
+    def add(self, poolpath):
+        if poolpath.startswith('http://') or poolpath.startswith('https://') \
+                or poolpath.startswith('ftp://'):
+            self._pools.append(hashget.filepool.HttpFilePool(url=poolpath))
+        else:
+            self._pools.append(hashget.filepool.DirFilePool(path=poolpath))
+
+    def __repr__(self):
+        s = self.__class__.__name__ + '('
+        for pool in self._pools:
+            s += str(pool) + ', '
+        s += ')'
+        return s
 
 class DirFilePool(FilePool):
     def __init__(self, path=None):
@@ -70,6 +109,10 @@ class DirFilePool(FilePool):
                 self.load1(os.path.join(root, f))
 
     def load1(self, path):
+        if os.path.islink(path):
+            target = os.readlink(path)
+            path = os.path.join(os.path.dirname(path), target)
+
         f = hashget.file.File(path, sums=self._sums)
         for spec in f.hashes.get_list():
             self._hashes[spec] = path
@@ -107,6 +150,7 @@ class DirFilePool(FilePool):
         self.load1(dst)
         self.new += 1
         log.debug('Added to local pool {}'.format(dst))
+        return True
 
     def __getitem__(self, hashspec):
         return self._hashes[hashspec]
@@ -183,7 +227,7 @@ class HttpFilePool(FilePool):
         :param path:
         :return:
         """
-        pass
+        return False
 
     def __getitem__(self, hashspec):
         item = self.get(hashspec, name=hashspec)

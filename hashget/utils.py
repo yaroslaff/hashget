@@ -6,7 +6,7 @@ import patoolib
 import time
 import datetime
 
-unpack_suffixes = [ '.deb', '.gz', '.xz', '.bz2', '.zip' ]
+unpack_suffixes = [ '.deb', '.gz', '.xz', '.bz2', '.zip', '.whl' ]
 
 def sha1sum(filename):
     h  = hashlib.sha1()
@@ -95,15 +95,16 @@ def kmgt(sz, frac=1):
             return tpl.format(n,k)
 
 
-def recursive_unpack(path, udir='/tmp', recursive=True):
+def recursive_unpack(path, udir='/tmp', recursive=True, top_level=True):
     """
         Recursively unpack archive and all archives in content
         Deletes symlinks
     """
 
-    if all( not path.endswith(suffix) for suffix in unpack_suffixes ):
-        # print("skip {}".format(path))
-        return None
+    if top_level == False:
+        if all( not path.endswith(suffix) for suffix in unpack_suffixes ):
+            # print("skip {}".format(path))
+            return None
 
     try:
         patoolib.test_archive(path, verbosity=-1)
@@ -121,8 +122,7 @@ def recursive_unpack(path, udir='/tmp', recursive=True):
     if recursive:
         for f in dircontent(nudir):
             if os.path.isfile(f) and not os.path.islink(f):
-                recursive_unpack(f, nudir)
-                
+                recursive_unpack(f, nudir, top_level=False)
     return nudir
     
 class Times():

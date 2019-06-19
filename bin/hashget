@@ -141,7 +141,7 @@ def main():
     def_target = 'auto'
     def_heuristics = ['all']
     def_hashdb = ['all']
-    def_pool = os.getenv('HASHGET_POOL', None)
+    def_pool =  list(filter(None, [ os.getenv('HASHGET_POOL', None) ] ))
 
     # default path
     if os.getuid() == 0:
@@ -197,7 +197,7 @@ def main():
     g.add_argument('--recursive', default=False, action='store_true', help='recursive unpacking (slower).')
     g.add_argument('-z', default=False, action='store_true', help='gzip tarred archive')
     g.add_argument('--sig', nargs='+', default=list(), metavar='SIG', help='Signature for --submit. format: SIGTYPE:SIGNATURE')
-    g.add_argument('--pool', default=def_pool, metavar='PATH', help='Pool with package files ({})'.format(def_pool))
+    g.add_argument('--pool', default=def_pool, nargs='*', metavar='PATH', help='Pool with package files ({})'.format(def_pool))
     g.add_argument('--info', default=None, nargs='*', metavar=('PATH', 'SUBCOMMAND'), help='Info about unpacking. Subcommands are: list and summary')
 
 
@@ -242,13 +242,9 @@ def main():
         fh.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
         log.addHandler(fh)
 
-    if(args.pool):
-        if args.pool.startswith('http://') or args.pool.startswith('https://'):
-            pool = hashget.filepool.HttpFilePool(url=args.pool)
-        else:
-            pool = hashget.filepool.DirFilePool(path=args.pool)
-    else:
-        pool = hashget.filepool.NullFilePool()
+    pool = hashget.filepool.FilePoolMultiplexer()
+    for poolpath in args.pool:
+        pool.add(poolpath)
 
     hashdb = hashget.hashdb.HashDBClient(path=args.hashdb_path, enabled_hashdb=args.hashdb)
 

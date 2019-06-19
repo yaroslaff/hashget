@@ -76,8 +76,7 @@ class Package(object):
             
 
     def unpack(self):                
-
-        self.unpacked = utils.recursive_unpack(self.path, recursive=self.recursive)
+        self.unpacked = utils.recursive_unpack(self.path, recursive=self.recursive, top_level = True)
 
         if self.unpacked:
             # remove links
@@ -91,7 +90,12 @@ class Package(object):
         if self.path:
             """ already downloaded """
             return self.path
-     
+
+        if not ( self.url.startswith('http://') or self.url.startswith('https://') or self.url.startswith('ftp://')):
+            errmsg = 'Not downloading {}, bad scheme'.format(self.url)
+            log.warning(errmsg)
+            raise ValueError(errmsg)
+
         cg = cacheget.CacheGet()
         r = cg.get(self.url)
         self.stat_cached += r['cached']
