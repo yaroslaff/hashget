@@ -16,9 +16,9 @@ Hashget compression is lossless, based on cryptographically strong SHA256 hashsu
 <summary>Chance of SHA256 collision</summary>
 Bitcoin was computing 300 quadrillion SHA-256 hashes per second. That's 300×10<sup>15</sup> hashes per second. 
 Let's say you were trying to perform a collision attack and would "only" need to calculate 2<sup>128</sup> hashes. 
-At the rate Bitcoin is going, it would take them 2<sup>128</sup>/(300*10<sup>15</sup>*86400*365.25)≈3.6×1013 years. 
+At the rate Bitcoin is going, it would take them 2<sup>128</sup>/(300*10<sup>15</sup>*86400*365.25)≈3.6×10<sup>13</sup> years. 
 
-In comparison, our universe is only about 13.7×109 years old. 
+In comparison, our universe is only about 13.7×10<sup>9</sup> years old. 
 
 https://crypto.stackexchange.com/questions/47809/why-havent-any-sha-256-collisions-been-found-yet
 
@@ -271,4 +271,6 @@ For more detailed documentation see [Wiki](https://gitlab.com/yaroslaff/hashget/
 For example, see [Incremental backups](https://gitlab.com/yaroslaff/hashget/wikis/incremental) chapter in wiki doc
 and [Glacier](https://gitlab.com/yaroslaff/hashget/wikis/Glacier) to know how to use Incremental/Differential backups 
 with Amazon Glacier or other storage engine. 
+
+Also, please check my other open-source project [Okerr](https://gitlab.com/yaroslaff/okerr-dev/). And [Okerr wiki-documentation](https://gitlab.com/yaroslaff/okerr-dev/-/wikis/home).
 
