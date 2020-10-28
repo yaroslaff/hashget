@@ -31,7 +31,7 @@ setup(
 
     install_requires=['patool','filetype','filelock','setuptools', 'requests'],
 
-    url='https://gitlab.com/yaroslaff/hashget',
+    url='https://github.com/yaroslaff/hashget',
     license='MIT',
     author='Yaroslav Polyakov',
     long_description=read('README.md'),

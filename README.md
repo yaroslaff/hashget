@@ -1,7 +1,7 @@
 # hashget
 
 Hashget is network *deduplication* tool working together with usual compression utilities (such as tar/gz/xz) and can be 
-[combined](https://gitlab.com/yaroslaff/hashget/wikis/Restic%20with%20hashget) with other backup tools such as [restic](https://restic.net/).  
+[combined](https://github.com/yaroslaff/hashget/wikis/Restic%20with%20hashget) with other backup tools such as [restic](https://restic.net/).  
 
 While usual compression tools uses mathematical algorithms for compressing data, hashget finds which files could be 
 downloaded from public (e.g. WordPress or Debian servers) or private (e.g. your company internal website) resources and 
@@ -43,7 +43,7 @@ pip3 install hashget[plugins]
 
 or clone from git:
 ```shell
-git clone https://gitlab.com/yaroslaff/hashget.git
+git clone https://github.com/yaroslaff/hashget.git
 ```
 
 ## QuickStart
@@ -73,7 +73,7 @@ STEP 3/3 tarring...
 `-f` to specify filename, `-z` to gzip it, `--pack .` commands which directory to pack and `--hashserver` without value disables 
 remote hashservers.
 
-You can check local indexes HashDB with [hashget-admin](https://gitlab.com/yaroslaff/hashget/wikis/hashget-admin) 
+You can check local indexes HashDB with [hashget-admin](https://github.com/yaroslaff/hashget/wikis/hashget-admin) 
 utility.
 
 ### Decompressing 
@@ -97,7 +97,7 @@ hashget archive is same as /tmp/test/wp.
 
 
 ### Debian VM compressing (built-in plugin)
-Compressing [test machine](https://gitlab.com/yaroslaff/hashget/wikis/Test-machine): 
+Compressing [test machine](https://github.com/yaroslaff/hashget/wikis/Test-machine): 
 
 (Since it requires access to VM filesystem, run as user root or use sudo)
 
@@ -124,7 +124,7 @@ will work much faster.
 For each package hashget archive will store link to [snapshot.debian.org](https://snapshot.debian.org) in restore-file.
 snapshot links are permanent and works since 2010. Unfortunately, other deb/apt based linux distributions do not have 
 such snapshots, so this method is very effective only for Debian. 
-You may [disable this heuristic](https://gitlab.com/yaroslaff/hashget/wikis/Disable%20heuristics%20and%20HashDB) 
+You may [disable this heuristic](https://github.com/yaroslaff/hashget/wikis/Disable%20heuristics%20and%20HashDB) 
 when packing other OS.
 
 ### Hint files
@@ -216,12 +216,12 @@ Even when new kernel package will be released (and it's not indexed anywhere), h
 automatically index (at least while new linux kernels will match same 'template' as it matches now for kernels 
 1.0 to 5.0.6).
 
-> Users and developers of large packages can write their own hashget plugins using [Linux kernel hashget plugin](https://gitlab.com/yaroslaff/hashget-kernel_org/)
+> Users and developers of large packages can write their own hashget plugins using [Linux kernel hashget plugin](https://github.com/yaroslaff/hashget-kernel.org/)
 as example. 
 
 ### What you should index 
 You should index ONLY static and permanent files, which will be available on same URL with same content during backup 
-lifetime. See [Expiration](https://gitlab.com/yaroslaff/hashget/wikis/Expiration) chapter in wiki documentation.
+lifetime. See [Expiration](https://github.com/yaroslaff/hashget/wikis/Expiration) chapter in wiki documentation.
 
 Not all projects provides such files. Usual linux package repositories has only latest files so it's not good for this
 purpose, but debian has great [snapshot.debian.org](https://snapshot.debian.org/) repository, which makes Debian great 
@@ -266,11 +266,11 @@ Recovered 8534/8534 files 450.0M bytes (0 downloaded, 98.7M from pool, 0 cached)
 ```
 
 # More Documentation
-For more detailed documentation see [Wiki](https://gitlab.com/yaroslaff/hashget/wikis/home).
+For more detailed documentation see [Wiki](https://github.com/yaroslaff/hashget/wikis/home).
 
-For example, see [Incremental backups](https://gitlab.com/yaroslaff/hashget/wikis/incremental) chapter in wiki doc
-and [Glacier](https://gitlab.com/yaroslaff/hashget/wikis/Glacier) to know how to use Incremental/Differential backups 
+For example, see [Incremental backups](https://github.com/yaroslaff/hashget/wikis/incremental) chapter in wiki doc
+and [Glacier](https://github.com/yaroslaff/hashget/wikis/Glacier) to know how to use Incremental/Differential backups 
 with Amazon Glacier or other storage engine. 
 
-Also, please check my other open-source project [Okerr](https://gitlab.com/yaroslaff/okerr-dev/). And [Okerr wiki-documentation](https://gitlab.com/yaroslaff/okerr-dev/-/wikis/home).
+Also, please check my other open-source project [Okerr](https://github.com/yaroslaff/okerr-dev/). And [Okerr wiki-documentation](https://github.com/yaroslaff/okerr-dev/-/wikis/home).
 
