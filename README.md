@@ -272,5 +272,5 @@ For example, see [Incremental backups](https://github.com/yaroslaff/hashget/wiki
 and [Glacier](https://github.com/yaroslaff/hashget/wikis/Glacier) to know how to use Incremental/Differential backups 
 with Amazon Glacier or other storage engine. 
 
-Also, please check my other open-source project [Okerr](https://github.com/yaroslaff/okerr-dev/). And [Okerr wiki-documentation](https://github.com/yaroslaff/okerr-dev/-/wikis/home).
+Also, please check my other open-source project [Okerr](https://gitlab.com/yaroslaff/okerr-dev/). And [Okerr wiki-documentation](https://gitlab.com/yaroslaff/okerr-dev/-/wikis/home).
 
