@@ -94,8 +94,7 @@ class BaseHeuristic():
 
     def __init__(self, hashdb=None):
         self.hashdb = hashdb
-        pass
-
+    
     def check(self, path):
         raise NotImplementedError
 
