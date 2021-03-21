@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from datetime import datetime
 import os
 import sys
 import shutil
@@ -177,11 +178,18 @@ def do_status(hashdb, project=None, webroot=None):
                                 log.debug("OTHER LINK {} > {} (not {})".format(
                                     hspec, os.path.basename(os.readlink(apath)), hp))
                                 total_otheralink += 1
+            if last_crawled:
+                last_crawled_age = datetime.now() - datetime.strptime(last_crawled, '%Y-%m-%d %H:%M:%S')
+                last_crawled_age_seconds = int(last_crawled_age.total_seconds())
+            else:
+                last_crawled_age = None
+                last_crawled_age_seconds = None
 
             print(
                     "  packages: {}\n"
                     "  first crawled: {}\n"
-                    "  last_crawled: {}\n"
+                    "  last crawled: {}\n"
+                    "  last crawled age: {}\n"
                     "  files: {}\n"
                     "  anchors: {}\n"
                     "  packages size: {}\n"
@@ -191,7 +199,8 @@ def do_status(hashdb, project=None, webroot=None):
                     "  noanchor size: {}\n"
                     "  no anchor link: {}\n"
                     "  bad anchor link: {}\n"
-                    .format(total_packages, first_crawled, last_crawled, total_files, total_anchors,
+                    .format(total_packages, first_crawled, last_crawled, last_crawled_age_seconds,
+                            total_files, total_anchors,
                             kmgt(total_size), kmgt(total_sum_size), kmgt(total_indexed_size),
                             total_indexed_size*100/total_sum_size if total_sum_size else 0,
                             total_noanchor, total_noanchor_sum_size,
