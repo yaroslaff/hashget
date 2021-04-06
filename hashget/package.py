@@ -8,6 +8,7 @@ import subprocess
 from . import cacheget
 from . import file
 from . import utils
+from .exceptions import DownloadFailure
 
 opt_recursive = False
 
@@ -98,6 +99,10 @@ class Package(object):
 
         cg = cacheget.CacheGet()
         r = cg.get(self.url)
+
+        if r is None:
+            raise DownloadFailure
+
         self.stat_cached += r['cached']
         self.stat_downloaded += r['downloaded']
         self.path = r['file']

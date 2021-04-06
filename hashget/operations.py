@@ -12,6 +12,7 @@ from hashget.singlelist import SingleList
 from hashget.heuristic_base import HeuristicSet, SubmitRequest
 from hashget.utils import kmgt
 from hashget.counters import Counters
+from hashget.exceptions import DownloadFailure
 
 log = logging.getLogger('hashget')
 
@@ -30,7 +31,7 @@ def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None,
 
     heur = HeuristicSet(hashdb=hashdb, heuristics=heuristics)
 
-    c = Counters(['total', 'local', 'pulled','new','skipped'])
+    c = Counters(['total', 'local', 'pulled','new','skipped', 'failed'])
 
     started = time.time()
 
@@ -61,9 +62,13 @@ def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None,
                     continue
 
                 if sr.url:
-                    log.info("submitting {}".format(sr.url))
-                    sr.submit(pool=pool, project=project)
-                    c.inc('new')
+                    log.info("submitting {}".format(sr.url))                    
+                    try:
+                        sr.submit(pool=pool, project=project)
+                    except DownloadFailure:
+                        c.inc('failed')
+                    else:
+                        c.inc('new')
                 else:
                     log.info("skipped {}".format(sr.first_sig()[1]))
                     c.inc('skipped')
@@ -75,9 +80,9 @@ def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None,
             log.debug('pull anchor for {} {}: {}'.format(a.filename,
                                                          kmgt(a.size), pullanchor))
 
-    log.info('Indexing done in {:.2f}s. {} local + {} pulled + {} new + {} skipped = {} total packages'.format(
+    log.info('Indexing done in {:.2f}s. {} local + {} pulled + {} new + {} skipped + {} failed = {} total packages'.format(
         time.time() - started,
-        c.local, c.pulled, c.new, c.skipped, c.total))
+        c.local, c.pulled, c.new, c.skipped, c.failed, c.total))
     print(c)
     return c
 
