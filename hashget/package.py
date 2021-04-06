@@ -8,7 +8,7 @@ import subprocess
 from . import cacheget
 from . import file
 from . import utils
-from .exceptions import DownloadFailure
+from .exceptions import DownloadFailure, BrokenPackage
 
 opt_recursive = False
 
@@ -67,7 +67,8 @@ class Package(object):
             return
 
         # someone forgot to unpack before read_files
-        assert(self.unpacked)
+        if self.unpacked is None:
+            raise BrokenPackage
 
         for path in utils.dircontent(self.unpacked):
             if os.path.isfile(path) and not os.path.islink(path):
@@ -99,9 +100,6 @@ class Package(object):
 
         cg = cacheget.CacheGet()
         r = cg.get(self.url)
-
-        if r is None:
-            raise DownloadFailure
 
         self.stat_cached += r['cached']
         self.stat_downloaded += r['downloaded']

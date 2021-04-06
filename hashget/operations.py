@@ -12,7 +12,7 @@ from hashget.singlelist import SingleList
 from hashget.heuristic_base import HeuristicSet, SubmitRequest
 from hashget.utils import kmgt
 from hashget.counters import Counters
-from hashget.exceptions import DownloadFailure
+from hashget.exceptions import BrokenPackage, DownloadFailure
 
 log = logging.getLogger('hashget')
 
@@ -65,7 +65,7 @@ def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None,
                     log.info("submitting {}".format(sr.url))                    
                     try:
                         sr.submit(pool=pool, project=project)
-                    except DownloadFailure:
+                    except (DownloadFailure, BrokenPackage) as e:
                         c.inc('failed')
                     else:
                         c.inc('new')

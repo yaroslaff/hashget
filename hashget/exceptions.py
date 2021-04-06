@@ -6,3 +6,6 @@ class HashPackageExists(HashGetBaseException):
 
 class DownloadFailure(HashGetBaseException):
     pass
+
+class BrokenPackage(HashGetBaseException):
+    pass

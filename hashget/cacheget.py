@@ -7,6 +7,7 @@ import logging
 import shutil
 
 from .utils import kmgt
+from .exceptions import DownloadFailure
 
 opt_verify_etag = True
 
@@ -131,7 +132,7 @@ class CacheGet():
         
         if r.status_code != 200:
             self.log.error("DOWNLOAD ERROR {} {}".format(r.status_code, url))
-            return None
+            raise DownloadFailure
                         
         tmpfh, tmppath = tempfile.mkstemp(prefix=self.tmpprefix, dir=self.tmpdir)         
         for chunk in r.iter_content(chunk_size=chunk_size): 
