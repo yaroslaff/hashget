@@ -67,6 +67,7 @@ def index(hashdb, root, anchors = None, filesz=None, heuristics=None, pool=None,
                         sr.submit(pool=pool, project=project)
                     except (DownloadFailure, BrokenPackage) as e:
                         c.inc('failed')
+                        log.error("ERROR processing".format(sr.first_sig()[1]))
                     else:
                         c.inc('new')
                 else:
