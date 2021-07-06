@@ -191,7 +191,6 @@ class DebStatus():
         lastkey = None
 
         array = False
-        print("ZZZ load_release", self.statusfile)
 
         with open(self.statusfile, encoding='utf-8') as f:
             for line in f:
