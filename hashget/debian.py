@@ -191,6 +191,7 @@ class DebStatus():
         lastkey = None
 
         array = False
+        print("ZZZ load_release", self.statusfile)
 
         with open(self.statusfile, encoding='utf-8') as f:
             for line in f:
@@ -199,7 +200,7 @@ class DebStatus():
                     array = True
                     datalist.append(data)
                     data = dict()
-                elif line[0] == ' ':
+                elif line[0] in [' ', '\t']:
                     # starts with space
                     if data[lastkey] == '':
                         data[lastkey] = list()
