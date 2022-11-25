@@ -208,7 +208,7 @@ class DebStatus():
                     array = True
                     datalist.append(data)
                     data = dict()
-                elif line[0] == ' ':
+                elif line[0] in [' ', '\t']:
                     # starts with space
                     if data[lastkey] == '':
                         data[lastkey] = list()
