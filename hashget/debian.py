@@ -13,7 +13,7 @@ from .cacheget import CacheGet
 
 from .submiturl import submit_url
 from .hashpackage import HashPackage
-from .exceptions import HashPackageExists
+from .exceptions import HashPackageExists, UnsupportedPackage
 
 rsess = None
 
@@ -30,7 +30,10 @@ class DebPackage(object):
         self.info = None        
         self.__url = None
         if info:
-            self.set_package_info(info)
+            try:
+                self.set_package_info(info)
+            except Exception as e:
+                raise UnsupportedPackage(e)
 
     def is_installed(self):        
         return self.status == 'install ok installed'
@@ -167,9 +170,12 @@ class DebStatus():
 
         self.__installed = 0
         for pdict in self.packages:
-            p = DebPackage(info=pdict)
-            if p.is_installed():
-                self.__installed += 1
+            try:
+                p = DebPackage(info=pdict)
+                if p.is_installed():
+                    self.__installed += 1
+            except UnsupportedPackage as e:
+                pass
 
         return self.__installed
 
@@ -177,7 +183,10 @@ class DebStatus():
     def packages_iter(self):
 
         for pdict in self.packages:
-            p = DebPackage(info=pdict)
+            try:
+                p = DebPackage(info=pdict)
+            except UnsupportedPackage as e:
+                pass
             if not p.is_installed():
                 continue
             yield (p)

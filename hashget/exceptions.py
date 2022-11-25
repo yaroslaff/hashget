@@ -9,3 +9,6 @@ class DownloadFailure(HashGetBaseException):
 
 class BrokenPackage(HashGetBaseException):
     pass
+
+class UnsupportedPackage(HashGetBaseException):
+    pass
