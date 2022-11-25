@@ -225,6 +225,9 @@ def main():
         print('HashGet version {}'.format(hashget.__version__))
         sys.exit(0)
 
+    if args.index == ':debian':
+        args.index = '/var/lib/dpkg/'
+
     # configure logging
     if args.verbose:
         loglevel = logging.DEBUG
