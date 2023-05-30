@@ -127,6 +127,8 @@ such snapshots, so this method is very effective only for Debian.
 You may [disable this heuristic](https://github.com/yaroslaff/hashget/wikis/Disable%20heuristics%20and%20HashDB) 
 when packing other OS.
 
+To index packages in current system (where you run hashget), you may use `hashget --index :debian`, (`:debian` is an easy to remember alias for /var/lib/dpkg)
+
 ### Hint files
 If our package is indexed (like we just did with wordpress) it will be very effectively deduplicated on packing.
 But what if it's not indexed? For example, if you cleaned hashdb cache or if you will restored this backup on other 
